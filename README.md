@@ -22,9 +22,9 @@ In brief, `doe` takes as input the CCF of a given spectrum and returns the numbe
 
 Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` directory and may constitues input CCF for `doe`.
 
-### I/O
+### Code I/O
 
-- Input:   *.dat     (ASCII file with 2 columns [abscissa ordinates] or FITS file (with CRVAL1 and CDELT1 keywords))
+- Input:  one dat (for a CCF) or fits (for a spectrum) input file  (unicode file with 2 columns [abscissa ordinates] or FITS file (with CRVAL1 and CDELT1 keywords))
 - Outputs:
   -  *_sd.dat  (selected successives derivatives [abscissa ordinates 1st 2nd 3rd])
   -  *_xp.dat  (peaks properties [x x_err f width xwmin xwmax sigma it]

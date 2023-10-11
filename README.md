@@ -67,7 +67,7 @@ To do
 
 ## Dependencies
 
-Excepted the standard library, <mark>doe</mark> relies on:
+Excepted the standard library, `doe` relies on:
 - numpy
 - scipy
 - matplotlib

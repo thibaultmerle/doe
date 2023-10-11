@@ -1,5 +1,7 @@
 ## `doe` Detection Of Extrema 
 
+![Control plot](doe_banner.png)
+
 Version: 2.0 
 
 Contact: tmerle@ulb.ac.be 

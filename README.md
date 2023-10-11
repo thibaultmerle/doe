@@ -8,7 +8,7 @@ Contact: tmerle@ulb.ac.be
 
 Reference: [Merle et al. (2017)](https://ui.adsabs.harvard.edu/abs/2017A%26A...608A..95M/abstract)
 
-Goal: `doe` is a command line tool written in Python3 designed to detect and fit (blended) components in cross-correlation function (CCF) of stellar spectra with templates. It can also be used directly to detect absorption lines in stellar spectra. 
+Goal: `doe` is a command line tool written in Python3 designed to detect and fit (blended) components in cross-correlation function (CCF) of stellar spectra with templates. It can also be used directly to detect absorption lines in normalized stellar spectra. 
 
 ---
 

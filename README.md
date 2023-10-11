@@ -20,15 +20,38 @@ In brief, `doe` takes as input the CCF of a given spectrum and returns the numbe
 
 ## Quick start
 
-Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` directory.
+Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` directory and may constitues input CCF for `doe`.
 
-To know all the available options:
+### I/O
+
+- Input:   *.dat     (ASCII file with 2 columns [abscissa ordinates] or FITS file (with CRVAL1 and CDELT1 keywords))
+- Outputs:
+  -  *_sd.dat  (selected successives derivatives [abscissa ordinates 1st 2nd 3rd])
+  -  *_xp.dat  (peaks properties [x x_err f width xwmin xwmax sigma it]
+                     if in addition, a fit of the components is performed, then:
+                        with -G option: [x x_err f width xwmin xwmax sigma it, Gaussian fit (mu, mu_err, sigma, n) + offset] 
+                        with -L option: [x x_err f width xwmin xwmax sigma it, Lorentzian fit (mu, mu_err, gamma, n) + offset]
+                        with -V option: [x x_err f width xwmin xwmax sigma it, Voigtian fit (mu, mu_err, alpha, gamma, n) + offset]
+                        with -R option: [x x_err f width xwmin xwmax sigma it, rotational fit (mu, mu_err, epsilon, vsini, n) + offset]
+  -  *.pdf     (if -p or -pp is given, plot of the CCF and its successive derivatives)
+
+### Help
 
 > doe.py -h 
 
-A simple example
+### Detection of peaks
 
-> doe.py ccfgen/
+One argument is mandatory when invoking `doe.py`: the input filename of the CCF or the spectrum
+> doe.py ccfgen/ccfgen_20000_3_components.dat -pp
+
+The `-pp` option allows to display an interactive control plot.
+The `-v` mmay be used to make `doe` more verbose.
+
+### Fit the detected peaks
+To do
+
+### The 3 main options to optimize detection (`-c`, `-d` an `-s`)
+To do
 
 ---
 

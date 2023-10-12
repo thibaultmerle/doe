@@ -1,16 +1,20 @@
 #!/usr/bin/python3
+'''
+Simulation of Cross-Correlation Functions with an arbitrary number of components.
+Each component is simulated by a Gaussian.
+'''
 
 import numpy as np
 import scipy.stats as st
 import matplotlib.pyplot as plt 
 
-spectral_resolution = 60000
-ncomp = 3 
-vrads = [-40, -10, 80]
-ampls = [1.0, 0.7, 0.6]
-vsigs = [10, 10, 15]
-vmin, vmax = -400, 400
-noise_offset = 0.0
+spectral_resolution = 60000 # Resolving power of the spectrograph
+ncomp = 3                   # Number of radial velocity (RV) components in the CCF
+vrads = [-40, -10, 80]      # Position of the RV components in km/s
+ampls = [1.0, 0.7, 0.6]     # Normalized amplitudes of the RV components (the highest component being at 1.0) 
+vsigs = [10, 10, 15]        # Intrinsic broadening of the RV components 
+vmin, vmax = -400, 400		# Velocity range in km/s
+noise_offset = 0.0          
 noise_amplitude = 0.1
 
 ofn = f'ccfgen_{spectral_resolution}_{ncomp}_components.dat'

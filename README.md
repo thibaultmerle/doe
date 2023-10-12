@@ -40,10 +40,12 @@ To see a description of all the command line options (general behaviour, code, f
                         with -R option: [x x_err f width xwmin xwmax sigma it, rotational fit (mu, mu_err, epsilon, vsini, n) + offset]
   -  *.pdf     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 
+### Generating simulated CCF
 
 Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` directory and may constitues input CCF for testing `doe`.
 Three simulated CCF are provided with 3 components at $-40$, $-10$ an $80$ km/s and for 3 resolving power $R$ = 20000, 40000 and 60000.
 
+`ccfgen.py` can simulate CCF for various resolving power and with an arbitrary number of radial velocity components. 
 
 ### Detection of peaks
 

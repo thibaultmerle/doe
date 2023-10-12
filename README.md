@@ -43,7 +43,7 @@ To see a description of all the command line options (general behaviour, code, f
 ### Generating simulated CCF
 
 Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` directory and may constitues input CCF for testing `doe`.
-Three simulated CCF are provided with 3 components at $-40$, $-10$ an $+80$ km/s and for 3 resolving power $R$ = 20000, 40000 and 60000.
+Three simulated CCF are provided with 3 components at $-40$, $-10$ an $+80$ km/s and for 3 resolving powers $R$ = 20000, 40000 and 60000.
 
 `ccfgen.py` can simulate CCF for various resolving power and with an arbitrary number of radial velocity components. 
 
@@ -65,7 +65,17 @@ The formal uncertainties are taken as half of the sample spacing.
 The `-v` mmay be used to make `doe` more verbose.
 
 ### The 3 main options to optimize detection (`-c`, `-d` an `-s`)
-To do
+
+The three main option of `doe` are:
+- `-c` the horizontal threshold on the CCF to only select peaks above it. The value is in the range [0, 1] with 0 a the continuum level and 1 at the highest value of the CCF. It is used to avoid spurious peak detection from the correlation noise.
+- `-s` the broadening parameter of the kernel function used to compute the successive derivatives. It allows to smooth and obtained well-behaved derivatives. In km/s.
+- `-d` the horizontal threshold on the second derivative. Only peaks with second derivative minima below this (-) threshold are selected. The value is positive and in the range [0, 1]. A value of 0 will select all the ascending zeros crossing of the third derivative.
+
+The default value for the threshold on the CCF is 30% ofthe full CCF amplitude.
+
+The default value for the threshold on the second derivative if 10% of the full amplitude.
+
+The default value for the broadening kernel is taken as 3 times the velocity step.
 
 ### Fit the detected peaks
 

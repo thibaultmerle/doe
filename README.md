@@ -43,17 +43,24 @@ To see a description of all the command line options (general behaviour, code, f
 ### Generating simulated CCF
 
 Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` directory and may constitues input CCF for testing `doe`.
-Three simulated CCF are provided with 3 components at $-40$, $-10$ an $80$ km/s and for 3 resolving power $R$ = 20000, 40000 and 60000.
+Three simulated CCF are provided with 3 components at $-40$, $-10$ an $+80$ km/s and for 3 resolving power $R$ = 20000, 40000 and 60000.
 
 `ccfgen.py` can simulate CCF for various resolving power and with an arbitrary number of radial velocity components. 
 
 ### Detection of peaks
 
 One argument is mandatory when invoking `doe.py`: the input filename of the CCF or the spectrum
-> doe.py ccfgen/ccfgen_20000.dat -pp
+> doe.py  ccfgen/ccfgen_20000.dat  -pp
 
 The `-pp` option allows to display an interactive control plot.
+
+The output on the command line is the input filename, the number of detected RV components, the RV values themselves and their formal uncertainties:
+
+> ccfgen/ccfgen_20000.dat 2  -27.762 ± 1.860   94.408 ± 1.860
+
 The `-v` mmay be used to make `doe` more verbose.
+
+
 
 ### Fit the detected peaks
 To do

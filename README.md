@@ -73,9 +73,9 @@ The three main option of `doe` are:
 
 The default value for the threshold on the CCF is 30% ofthe full CCF amplitude.
 
-The default value for the threshold on the second derivative if 10% of the full amplitude.
-
 The default value for the broadening kernel is taken as 3 times the velocity step.
+
+The default value for the threshold on the second derivative is 10% of the full amplitude.
 
 ### Fit the detected peaks
 
@@ -87,10 +87,9 @@ this will return on the command line:
 
 > ccfgen/ccfgen_20000.dat 2  -24.740 ± 0.195   83.402 ± 0.353
 
-The RVs are slightly different here because the model mixture function applies directly to the CCF.
+The RVs are slightly different here because the model mixture function applies directly to the CCF. The formal uncertainties are decreased because more velocity points are used in the fitting process.
 
-The formal uncertainties are decreased because more velocity points are used in the fitting process.
-
+Other mixture model functions are available: Lorentzian profile `-L`, Voigtian profile `-V` and rotational profile `-R`.
 
 
 ---

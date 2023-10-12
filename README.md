@@ -64,12 +64,24 @@ The formal uncertainties are taken as half of the sample spacing.
 
 The `-v` mmay be used to make `doe` more verbose.
 
-### Fit the detected peaks
-
-
-
 ### The 3 main options to optimize detection (`-c`, `-d` an `-s`)
 To do
+
+### Fit the detected peaks
+
+To fit a model mixture function made of Gaussians, use the `-G` option:
+
+> doe.py ../ccfgen/ccfgen_20000.dat -pp -G
+
+this will return on the command line:
+
+> ccfgen/ccfgen_20000.dat 2  -24.740 ± 0.195   83.402 ± 0.353
+
+The RVs are slightly different here because the model mixture function applies directly to the CCF.
+
+The formal uncertainties are decreased because more velocity points are used in the fitting process.
+
+
 
 ---
 

@@ -58,12 +58,15 @@ The output on the command line is the input filename, the number of detected RV 
 
 > ccfgen/ccfgen_20000.dat 2  -27.762 ± 1.860   94.408 ± 1.860
 
+These RV values comes from the intersection of the ascending third derivative with x-axis.
+
+The formal uncertainties are taken as half of the sample spacing.
+
 The `-v` mmay be used to make `doe` more verbose.
 
-
-
 ### Fit the detected peaks
-To do
+
+
 
 ### The 3 main options to optimize detection (`-c`, `-d` an `-s`)
 To do

@@ -13,7 +13,7 @@ ncomp = 3                   # Number of radial velocity (RV) components in the C
 vrads = [-40, -10, 80]      # Position of the RV components in km/s
 ampls = [1.0, 0.7, 0.6]     # Normalized amplitudes of the RV components (the highest component being at 1.0) 
 vsigs = [10, 10, 15]        # Intrinsic broadening of the RV components 
-vmin, vmax = -400, 400		# Velocity range in km/s
+vmin, vmax = -400, 400	    # Velocity range in km/s
 noise_offset = 0.0          
 noise_amplitude = 0.1
 

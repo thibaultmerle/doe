@@ -50,13 +50,13 @@ Three simulated CCF are provided with 3 components at $-40$, $-10$ an $+80$ km/s
 ### Detection of peaks
 
 One argument is mandatory when invoking `doe.py`: the input filename of the CCF or the spectrum
-> doe.py  ccfgen/ccfgen_20000.dat  -pp
+> doe.py  ccfgen/ccf_20000.dat  -pp
 
-The `-pp` option allows to display an interactive control plot.
+The `-pp` option allows to display an interactive control plot. `-p` can also be used to save the control plot without being interactively displayed.
 
 The output on the command line is the input filename, the number of detected RV components, the RV values themselves and their formal uncertainties:
 
-> ccfgen/ccfgen_20000.dat 2  -27.762 ± 1.860   94.408 ± 1.860
+> ccfgen/ccf_20000.dat 2  -27.762 ± 1.860   94.408 ± 1.860
 
 These RV values comes from the intersection of the ascending third derivative with x-axis.
 
@@ -64,7 +64,7 @@ The formal uncertainties are taken as half of the sample spacing.
 
 The `-v` may be used to make `doe` more verbose.
 
-### The 3 main options to optimize detection (`-c`, `-d` an `-s`)
+### The 3 main options to optimize components detection (`-c`, `-d` an `-s`)
 
 The three main option of `doe` are:
 - `-c` the horizontal threshold on the CCF to only select peaks above it. The value is in the range [0, 1] with 0 a the continuum level and 1 at the highest value of the CCF. It is used to avoid spurious peak detection from the correlation noise.
@@ -77,15 +77,18 @@ The default value for the broadening kernel is taken as 3 times the velocity ste
 
 The default value for the threshold on the second derivative is 10% of the full amplitude.
 
+By default behavior will return two components for the ccf_40000.dat 
+> doe.py ../
+
 ### Fit the detected peaks
 
 To fit a model mixture function made of Gaussians, use the `-G` option:
 
-> doe.py ../ccfgen/ccfgen_20000.dat -pp -G
+> doe.py ../ccfgen/ccf_20000.dat -pp -G
 
 this will return on the command line:
 
-> ccfgen/ccfgen_20000.dat 2  -24.740 ± 0.195   83.402 ± 0.353
+> ccfgen/ccf_20000.dat 2  -24.740 ± 0.195   83.402 ± 0.353
 
 The RVs are slightly different here because the model mixture function applies directly to the CCF. The formal uncertainties are decreased because more velocity points are used in the fitting process.
 

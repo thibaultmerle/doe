@@ -20,12 +20,17 @@ In brief, `doe` takes as input the CCF of a given spectrum and returns the numbe
 
 ## Quick start
 
-Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` directory and may constitues input CCF for `doe`.
+
+### Help
+
+To see a description of all the command line options (general behaviour, code, fitting and graphical parameters): 
+
+> doe.py -h 
 
 ### Code I/O
 
-- Input:  one dat (for a CCF) or fits (for a spectrum) input file  (unicode file with 2 columns [abscissa ordinates] or FITS file (with CRVAL1 and CDELT1 keywords))
-- Outputs:
+- **Input**:  one dat (for a CCF) or fits (for a spectrum) input file  (unicode file with 2 columns [abscissa ordinates] or FITS file (with CRVAL1 and CDELT1 keywords))
+- **Outputs**:
   -  *_sd.dat  (selected successives derivatives [abscissa ordinates 1st 2nd 3rd])
   -  *_xp.dat  (peaks properties [x x_err f width xwmin xwmax sigma it]
                      if in addition, a fit of the components is performed, then:
@@ -35,14 +40,15 @@ Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` dire
                         with -R option: [x x_err f width xwmin xwmax sigma it, rotational fit (mu, mu_err, epsilon, vsini, n) + offset]
   -  *.pdf     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 
-### Help
 
-> doe.py -h 
+Some synthetic CCF have been generated with the `ccfgen.py` in the `ccfgen` directory and may constitues input CCF for testing `doe`.
+Three simulated CCF are provided with 3 components at $-40$, $-10$ an $80$ km/s and for 3 resolving power $R$ = 20000, 40000 and 60000.
+
 
 ### Detection of peaks
 
 One argument is mandatory when invoking `doe.py`: the input filename of the CCF or the spectrum
-> doe.py ccfgen/ccfgen_20000_3_components.dat -pp
+> doe.py ccfgen/ccfgen_20000.dat -pp
 
 The `-pp` option allows to display an interactive control plot.
 The `-v` mmay be used to make `doe` more verbose.

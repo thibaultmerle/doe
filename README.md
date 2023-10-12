@@ -77,8 +77,16 @@ The default value for the broadening kernel is taken as 3 times the velocity ste
 
 The default value for the threshold on the second derivative is 10% of the full amplitude.
 
-By default behavior will return two components for the ccf_40000.dat 
-> doe.py ../
+
+The default behavior will return two components for the ccf_40000.dat 
+> doe.py ccfgen/ccf_40000.dat -pp
+> ccfgen/ccf_40000.dat 2  -37.495 ± 0.950   80.280 ± 0.950
+
+while using a narrower kernel  of 4 km/s allow to detect the blended components:
+
+> doe.py ccfgen/ccf_40000.dat -s 4
+> ccfgen/ccf_40000.dat 3  -40.977 ± 0.950   -8.794 ± 0.950   80.790 ± 0.950
+
 
 ### Fit the detected peaks
 

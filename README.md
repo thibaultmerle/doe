@@ -62,7 +62,7 @@ These RV values comes from the intersection of the ascending third derivative wi
 
 The formal uncertainties are taken as half of the sample spacing.
 
-The `-v` mmay be used to make `doe` more verbose.
+The `-v` may be used to make `doe` more verbose.
 
 ### The 3 main options to optimize detection (`-c`, `-d` an `-s`)
 
@@ -90,7 +90,6 @@ this will return on the command line:
 The RVs are slightly different here because the model mixture function applies directly to the CCF. The formal uncertainties are decreased because more velocity points are used in the fitting process.
 
 Other mixture model functions are available: Lorentzian profile `-L`, Voigtian profile `-V` and rotational profile `-R`.
-
 
 ---
 

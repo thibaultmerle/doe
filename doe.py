@@ -587,8 +587,8 @@ if __name__ == '__main__':
      print(f"\nNumber of ascending zeros on the third derivative:     {xp_tot.size}")   
      print("\nRelative threshold on the 2nd derivative:  THRES2   = ", THRES2*100, "% => Absolute threshold:", format(-thres2, '10.3e'))
      print(f"\nNumber of RV components kept on the second derivative: {xp_sel.size}")
-     for i, j, k in zip(xp_sel, xp_sel_err1, xp_sel_err2): 
-        print('{:8.3f} \u00B1 {:5.3f} {:5.3f}'.format(i, j, k), end=' ')
+     for i, j in zip(xp_sel, xp_sel_err1, xp_sel_err2): 
+        print('{:8.3f} \u00B1 {:5.3f} {:5.3f}'.format(i, j), end=' ')
      print()
 
 

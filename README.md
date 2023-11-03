@@ -34,10 +34,10 @@ To see a description of all the command line options (general behaviour, code, f
   -  *_sd.dat  (selected successives derivatives [abscissa ordinates 1st 2nd 3rd])
   -  *_xp.dat  (peaks properties [x x_err f width xwmin xwmax sigma it]
                      if in addition, a fit of the components is performed, then:
-                        with -G option: [x x_err f width xwmin xwmax sigma it, Gaussian fit (mu, mu_err, sigma, n) + offset] 
-                        with -L option: [x x_err f width xwmin xwmax sigma it, Lorentzian fit (mu, mu_err, gamma, n) + offset]
-                        with -V option: [x x_err f width xwmin xwmax sigma it, Voigtian fit (mu, mu_err, alpha, gamma, n) + offset]
-                        with -R option: [x x_err f width xwmin xwmax sigma it, rotational fit (mu, mu_err, epsilon, vsini, n) + offset]
+                        - with -G option: [x x_err f width xwmin xwmax sigma it, Gaussian fit (mu, mu_err, sigma, n) + offset] 
+                        - with -L option: [x x_err f width xwmin xwmax sigma it, Lorentzian fit (mu, mu_err, gamma, n) + offset]
+                        - with -V option: [x x_err f width xwmin xwmax sigma it, Voigtian fit (mu, mu_err, alpha, gamma, n) + offset]
+                        - with -R option: [x x_err f width xwmin xwmax sigma it, rotational fit (mu, mu_err, epsilon, vsini, n) + offset]
   -  *.pdf     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 
 ### Generating simulated CCF

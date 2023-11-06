@@ -268,96 +268,7 @@ def load_fits(finp, extn, verb):
 #def method_err(SIGMA, dx, popt):
 #  return abs(popt[0] + popt[1]*SIGMA + popt[2]*dx + popt[3]*SIGMA*dx)
 
-
-#######################################################################################
-
-
-if __name__ == '__main__':
-
-  version = 2.0 # DOE version
-  TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
-  THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
-  THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)
-  PLT = False
-  MODEL_FIT = None # Name of the mixture model function use to fit the peaks
-  NP_MAX = 5 # Maximum number of peak positions written on the plot
-  # 
-  DSIGMA = 2    # [km/s or Å] Step on the SIGMA parameter use for iteration  (when ONE_PASS = False)
-  N_OFFSET = 10 # Number of points selected on the left and right of the selected CCF and derivatives in addition to imin and imax
-  #POPT_ERR = [0.0000, -0.0000, -0.0000,  0.0000] # Internal + CCF sampling error estimation using script_fit_bias_precision.py
-  
-  LEASTSQ = False #Internal option to compare with a Gaussian fit from the scipy.optimize.leastsq
-
-  np.set_printoptions(linewidth=sys.maxsize)
-
-  #Command line arguments
-  parser = ap.ArgumentParser(description=f'Detection Of Extrema (DOE). Version {version}. Use successive derivatives to find blended components.', epilog='2022-11-06 Thibault Merle')
-  #Positional
-  parser.add_argument('ifn', help='Input filename [x, f] in unicode format or FITS (with CRVAL1 and CDELT1 defined).')
-  #Optional -- general behaviour
-  group1 = parser.add_argument_group('General behaviour')
-  group1.add_argument('-v', '--verbose', action='store_true', default=False, help='verbosity')
-  group1.add_argument('-t', '--type', default=TYP, help='Extrema to find: min for absorption spectrum, max for cross-correlation function (default = '+TYP+').')
-  group1.add_argument('-p', '--plot', action='count', default=None, help='"-p" write a plot, "-pp" and display it.')
-  group1.add_argument('-e', '--extension_number', type=int, default=0, help='Input FITS extension number (default: 0)')
-  group1.add_argument('-i', '--ignore_outputs', action='store_true', default=False, help='Do not write the outputs *_xp.dat and *_sd.dat') 
-  group1.add_argument('-i2', '--ignore_output2', action='store_true', default=False, help='Do not write the output *_sd.dat') 
-  #Optional -- Code parameters
-  group2 = parser.add_argument_group('Code parameters')
-  group2.add_argument('-c', '--thres0', type=float, default=THRES0, help='threshold on the intensity in percent of the full scale (default = '+str(THRES0)+').')
-  group2.add_argument('-d', '--thres2', type=float, default=THRES2, help='threshold on the 2nd derivative of the intensity in percent of the full scale (default = '+str(THRES2)+').')
-  group2.add_argument('-s', '--sigma', type=float, default=None, help='Standard deviation for the Gaussian kernel in km/s or Å used to smooth the derivatives.')
-  group2.add_argument('-n', type=int, default=None, help='Number of interpolated points required for the input data (should be larger than the number of selected x points.)')
-  group2.add_argument('-no', '--n_offset', type=int, default=N_OFFSET, help='Number of points below/above the CCF threshold taken on the left and right of the selected CCF')
-  group2.add_argument('-1', '--one_pass', action='store_true', default=False, help='One pass without automatic adjustment of SIGMA (no iteration)')
-  #Optional -- Fitting parameters
-  group4 = parser.add_argument_group('Fitting parameters')
-  group4.add_argument('--comptol', type=float, default=20, help='Fit tolerance on x position for each x component in km/s or Å (default: 100).')
-  group4.add_argument('-G', '--Gaussian_fit', action='store_true', default=False, help='Fit the detected peaks with Gaussian function and give the velocities fitted on the line command.')
-  group4.add_argument('-L', '--Lorentzian_fit', action='store_true', default=False, help='Fit the detected peaks with Lorentzian function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
-  group4.add_argument('-V', '--Voigtian_fit', action='store_true', default=False, help='Fit the detected peaks with Voigt function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
-  group4.add_argument('-R', '--rotational_fit', action='store_true', default=False, help='Fit the detected peaks with rotational function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
-  group4.add_argument('-m', type=int, default=0, help='Number of components to fit (it forces DOE to fit this number of RV components).')
-  #Optional -- Graphical parameters
-  group3 = parser.add_argument_group('Graphical parameters')
-  group3.add_argument('-xmin', '--xmin', type=float, default=None, help='x minimum value for the plot')
-  group3.add_argument('-xmax', '--xmax', type=float, default=None, help='x maximum value for the plot')
-  group3.add_argument('--ymin', type=float, default=None, help='y minimum value for the CCF/flux of the plot')
-  group3.add_argument('--ymax', type=float, default=None, help='y maximum value for the CCF/flux of the plot')
-  group3.add_argument('-not', '--no_title', action='store_true', default=False, help='Do not display the title over the plot.')
-  group3.add_argument('-lab', '--label', type=str, default=None, help='Display a label in place of title.')
-  group3.add_argument('--pure_derivative', action='store_true', default=False, help='Show the pure derivative without smoothing.')
-  
-  args = parser.parse_args()
-  
-  #Read input line command arguments 
-  IFN = args.ifn
-  BLA = args.verbose
-  PLT = args.plot
-  TYP = args.type
-  ONE_PASS = args.one_pass # If True no iteration on SIGMA allowed
-  THRES0 = args.thres0
-  THRES2 = args.thres2
-  SIGMA0 = args.sigma
-  N = args.n
-  N_OFFSET = args.n_offset
-  XMIN = args.xmin
-  XMAX = args.xmax
-  YMIN = args.ymin
-  YMAX = args.ymax
-  NOT = args.no_title
-  LAB = args.label
-  PURE_DER = args.pure_derivative
-  EXT_NUMBER = args.extension_number
-  Gaussian_FIT = args.Gaussian_fit
-  Lorentzian_FIT = args.Lorentzian_fit
-  Voigtian_FIT = args.Voigtian_fit
-  ROTATIONAL_FIT = args.rotational_fit
-  COMPTOL = args.comptol
-  NO_OUTPUTS = args.ignore_outputs
-  NO_OUTPUT2 = args.ignore_output2
-  NC = args.m
-  
+def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER, Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC):
   if Gaussian_FIT:
      MODEL_FIT = "Gaussian"
   elif Lorentzian_FIT:
@@ -449,7 +360,6 @@ if __name__ == '__main__':
      x0d = x0[:x0.size-1]
      x0dd = x0d[:x0d.size-1]
      x0ddd = x0dd[:x0dd.size-1] 
-  
   
   #Range of selected data
   Dx = max(x)-min(x)
@@ -545,8 +455,6 @@ if __name__ == '__main__':
         SIGMA += DSIGMA
         if False:
            print("count = ", count, ", SIGMA = ", SIGMA)
-
-
 
 
   # Error of the method (valid for one component only)
@@ -1000,4 +908,99 @@ if __name__ == '__main__':
         plt.show()
      else:
         plt.draw()
+
+
+#######################################################################################
+
+
+if __name__ == '__main__':
+
+  #Default parameters
+  version = 2.0 # DOE version
+  TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
+  THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
+  THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)
+  PLT = False
+  MODEL_FIT = None # Name of the mixture model function use to fit the peaks
+  NP_MAX = 5 # Maximum number of peak positions written on the plot
+  # 
+  DSIGMA = 2    # [km/s or Å] Step on the SIGMA parameter use for iteration  (when ONE_PASS = False)
+  N_OFFSET = 10 # Number of points selected on the left and right of the selected CCF and derivatives in addition to imin and imax
+  #POPT_ERR = [0.0000, -0.0000, -0.0000,  0.0000] # Internal + CCF sampling error estimation using script_fit_bias_precision.py
+  
+  LEASTSQ = False #Internal option to compare with a Gaussian fit from the scipy.optimize.leastsq
+
+  np.set_printoptions(linewidth=sys.maxsize)
+
+  #Command line arguments
+  parser = ap.ArgumentParser(description=f'Detection Of Extrema (DOE). Version {version}. Use successive derivatives to find blended components.', epilog='2022-11-06 Thibault Merle')
+  #Positional
+  parser.add_argument('ifn', help='Input filename [x, f] in unicode format or FITS (with CRVAL1 and CDELT1 defined).')
+  #Optional -- general behaviour
+  group1 = parser.add_argument_group('General behaviour')
+  group1.add_argument('-v', '--verbose', action='store_true', default=False, help='verbosity')
+  group1.add_argument('-t', '--type', default=TYP, help='Extrema to find: min for absorption spectrum, max for cross-correlation function (default = '+TYP+').')
+  group1.add_argument('-p', '--plot', action='count', default=None, help='"-p" write a plot, "-pp" and display it.')
+  group1.add_argument('-e', '--extension_number', type=int, default=0, help='Input FITS extension number (default: 0)')
+  group1.add_argument('-i', '--ignore_outputs', action='store_true', default=False, help='Do not write the outputs *_xp.dat and *_sd.dat') 
+  group1.add_argument('-i2', '--ignore_output2', action='store_true', default=False, help='Do not write the output *_sd.dat') 
+  #Optional -- Code parameters
+  group2 = parser.add_argument_group('Code parameters')
+  group2.add_argument('-c', '--thres0', type=float, default=THRES0, help='threshold on the intensity in percent of the full scale (default = '+str(THRES0)+').')
+  group2.add_argument('-d', '--thres2', type=float, default=THRES2, help='threshold on the 2nd derivative of the intensity in percent of the full scale (default = '+str(THRES2)+').')
+  group2.add_argument('-s', '--sigma', type=float, default=None, help='Standard deviation for the Gaussian kernel in km/s or Å used to smooth the derivatives.')
+  group2.add_argument('-n', type=int, default=None, help='Number of interpolated points required for the input data (should be larger than the number of selected x points.)')
+  group2.add_argument('-no', '--n_offset', type=int, default=N_OFFSET, help='Number of points below/above the CCF threshold taken on the left and right of the selected CCF')
+  group2.add_argument('-1', '--one_pass', action='store_true', default=False, help='One pass without automatic adjustment of SIGMA (no iteration)')
+  #Optional -- Fitting parameters
+  group4 = parser.add_argument_group('Fitting parameters')
+  group4.add_argument('--comptol', type=float, default=20, help='Fit tolerance on x position for each x component in km/s or Å (default: 100).')
+  group4.add_argument('-G', '--Gaussian_fit', action='store_true', default=False, help='Fit the detected peaks with Gaussian function and give the velocities fitted on the line command.')
+  group4.add_argument('-L', '--Lorentzian_fit', action='store_true', default=False, help='Fit the detected peaks with Lorentzian function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
+  group4.add_argument('-V', '--Voigtian_fit', action='store_true', default=False, help='Fit the detected peaks with Voigt function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
+  group4.add_argument('-R', '--rotational_fit', action='store_true', default=False, help='Fit the detected peaks with rotational function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
+  group4.add_argument('-m', type=int, default=0, help='Number of components to fit (it forces DOE to fit this number of RV components).')
+  #Optional -- Graphical parameters
+  group3 = parser.add_argument_group('Graphical parameters')
+  group3.add_argument('-xmin', '--xmin', type=float, default=None, help='x minimum value for the plot')
+  group3.add_argument('-xmax', '--xmax', type=float, default=None, help='x maximum value for the plot')
+  group3.add_argument('--ymin', type=float, default=None, help='y minimum value for the CCF/flux of the plot')
+  group3.add_argument('--ymax', type=float, default=None, help='y maximum value for the CCF/flux of the plot')
+  group3.add_argument('-not', '--no_title', action='store_true', default=False, help='Do not display the title over the plot.')
+  group3.add_argument('-lab', '--label', type=str, default=None, help='Display a label in place of title.')
+  group3.add_argument('--pure_derivative', action='store_true', default=False, help='Show the pure derivative without smoothing.')
+  
+  args = parser.parse_args()
+  
+  #Read input line command arguments 
+  IFN = args.ifn
+  BLA = args.verbose
+  PLT = args.plot
+  TYP = args.type
+  ONE_PASS = args.one_pass # If True no iteration on SIGMA allowed
+  THRES0 = args.thres0
+  THRES2 = args.thres2
+  SIGMA0 = args.sigma
+  N = args.n
+  N_OFFSET = args.n_offset
+  XMIN = args.xmin
+  XMAX = args.xmax
+  YMIN = args.ymin
+  YMAX = args.ymax
+  NOT = args.no_title
+  LAB = args.label
+  PURE_DER = args.pure_derivative
+  EXT_NUMBER = args.extension_number
+  Gaussian_FIT = args.Gaussian_fit
+  Lorentzian_FIT = args.Lorentzian_fit
+  Voigtian_FIT = args.Voigtian_fit
+  ROTATIONAL_FIT = args.rotational_fit
+  COMPTOL = args.comptol
+  NO_OUTPUTS = args.ignore_outputs
+  NO_OUTPUT2 = args.ignore_output2
+  NC = args.m
+  
+
+  run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER,\
+        Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC)
 

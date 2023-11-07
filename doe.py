@@ -22,6 +22,7 @@
 #          *.pdf     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 #
 # History:
+# 20231106: Set the main part of the code in a function run_doe to be used in import
 # 20221106: Add the values of velocities, errors and widths on the plot
 #         : Add the '-m' option to force the number of components to fit
 #         : Add the internal LEASTSQ parameter to compare Gaussian fitting procedure of scipy.optimize

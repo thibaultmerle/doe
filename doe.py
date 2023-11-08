@@ -922,7 +922,7 @@ def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, X
 if __name__ == '__main__':
 
   #Default parameters
-  version = 2.0 # DOE version
+  version = 2.1 # DOE version
   TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
   THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
   THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)

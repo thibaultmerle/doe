@@ -17,7 +17,8 @@ vmin, vmax = -400, 400	    # Velocity range in km/s
 noise_offset = 0.0          
 noise_amplitude = 0.1
 
-ofn = f'ccfgen_{spectral_resolution}_{ncomp}_components.dat'
+ofn1 = f'ccfgen_{spectral_resolution}_{ncomp}_components.dat'
+ofn2 = f'ccfgen_{spectral_resolution}_{ncomp}_components.npy'
 
 velocity_elt = 299792.458/spectral_resolution
 dv = round(velocity_elt/4, 1)
@@ -43,13 +44,13 @@ print(f'The velocity step is:       {dv:8.3f} km/s')
 print(f'Velocity range: [{vmin}, {vmax}] km/s')
 print(f'Number of velocity points: {nrvs}')
 
-print(f'Output file:  {ofn}')
-print(f'Control plot: {ofn.replace(".dat", ".pdf")}')
+print(f'Output file1:  {ofn1}')
+print(f'Output file2:  {ofn2}')
+print(f'Control plot: {ofn1.replace(".dat", ".pdf")}')
 
 data = np.array([rvs, convolved_noisy_ccf]).T
-np.savetxt(ofn, data, fmt='%12.4e')
-
-
+np.savetxt(ofn1, data, fmt='%12.4e')
+np.save(ofn2, data)
 
 plt.figure(1, figsize=(10,4), edgecolor='k', facecolor='w', tight_layout=True)
 #plt.plot(rvs, noisy_ccf,'-+b')
@@ -62,5 +63,5 @@ plt.ylabel('CCF')
 plt.legend(title=f'{ncomp} components')
 plt.title(f'$R$ = {spectral_resolution}  Velocity element = {velocity_elt:.3f} km/s  Velocity sampling = {dv:.3f} km/s')
 plt.xlim(vmin, vmax)
-plt.savefig(ofn.replace('.dat', '.pdf'))
+plt.savefig(ofn1.replace('.dat', '.pdf'))
 plt.show()

@@ -269,7 +269,7 @@ def load_fits(finp, extn, verb):
 #def method_err(SIGMA, dx, popt):
 #  return abs(popt[0] + popt[1]*SIGMA + popt[2]*dx + popt[3]*SIGMA*dx)
 
-def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER, Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ):
+def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER, Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ, NP_MAX):
   if Gaussian_FIT:
      MODEL_FIT = "Gaussian"
   elif Lorentzian_FIT:
@@ -1008,5 +1008,5 @@ if __name__ == '__main__':
   
 
   run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER,\
-        Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ)
+        Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ, NP_MAX)
 

@@ -269,7 +269,7 @@ def load_fits(finp, extn, verb):
 #def method_err(SIGMA, dx, popt):
 #  return abs(popt[0] + popt[1]*SIGMA + popt[2]*dx + popt[3]*SIGMA*dx)
 
-def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER, Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC):
+def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER, Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ):
   if Gaussian_FIT:
      MODEL_FIT = "Gaussian"
   elif Lorentzian_FIT:
@@ -746,7 +746,7 @@ def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_
            plt1.plot(x0, mmf(x0, *popt), 'b-', label=MODEL_FIT + ' fit')
            if npeaks > 1:
               #Plot individual components
-              if MODEL_FIT == 'Gausian':
+              if MODEL_FIT == 'Gaussian':
                  for mu, sigma, n, offset in zip(mu_mmf, sig_mmf, n_mmf, c_mmf*np.ones(wp.size)):
                     ytemp = n*np.exp(-(x0-mu)**2/(2*sigma**2)) + offset
                     plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
@@ -1008,5 +1008,5 @@ if __name__ == '__main__':
   
 
   run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER,\
-        Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC)
+        Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ)
 

@@ -19,7 +19,7 @@
 #                        with -L option: [x x_err f width xwmin xwmax sigma it, Lorentzian fit (mu, mu_err, gamma, n) + offset]
 #                        with -V option: [x x_err f width xwmin xwmax sigma it, Voigtian fit (mu, mu_err, alpha, gamma, n) + offset]
 #                        with -R option: [x x_err f width xwmin xwmax sigma it, rotational fit (mu, mu_err, epsilon, vsini, n) + offset]
-#          *.pdf     (if -p or -pp is given, plot of the CCF and its successive derivatives)
+#          *.png     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 #
 # History:
 # 20231106: Set the main part of the code in a function run_doe to be used in import
@@ -278,6 +278,8 @@ def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, X
       MODEL_FIT = "Voigtian"
   elif ROTATIONAL_FIT:
       MODEL_FIT = "rotational"
+  else:
+      MODEL_FIT = None
   
   if TYP not in ('min', 'max'):
      print('The type option -t accepts only "min" or "max" values.')
@@ -286,6 +288,9 @@ def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, X
   #Load input data
   if IFN.endswith('.fits') or IFN.endswith('.fit'):
     x_inp, f_inp = load_fits(IFN, EXT_NUMBER, BLA)
+  elif IFN.endswith('.npy'):
+    idata = np.load(IFN)
+    x_inp, f_inp = idata[0], idata[1]
   else:
     x_inp, f_inp = np.loadtxt(IFN, unpack=True, usecols=(0, 1))
   
@@ -379,7 +384,7 @@ def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, X
   OFN1 = op.basename(IFN[:-4])+parstr+'_xp.dat' # Store the positions of the detected peaks
   OFN2 = op.basename(IFN[:-4])+parstr+'_sd.dat' # Store the selected input data and their 3 successives derivatives
   if PLT:
-     OFN3 = op.basename(IFN[:-4])+parstr+'.pdf' 
+     OFN3 = op.basename(IFN[:-4])+parstr+'.png' 
   
   #Initialization of the counter and the SIGMA value.
   #The loop is performed on SIGMA adding DSIGMA at each iteration.
@@ -903,7 +908,7 @@ def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, X
      #plt3.set_xticklabels([])
      #plt4.set_xticklabels(['', -75, -50, -25, 0, 25, 50, 75])
 
-     plt.savefig(OFN3, dpi=150, format='pdf', orientation='landscape', bbox_inches='tight')    
+     plt.savefig(OFN3, dpi=150, orientation='landscape', bbox_inches='tight')    
   
      if PLT == 2:
         plt.show()

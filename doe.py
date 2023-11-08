@@ -269,7 +269,7 @@ def load_fits(finp, extn, verb):
 #def method_err(SIGMA, dx, popt):
 #  return abs(popt[0] + popt[1]*SIGMA + popt[2]*dx + popt[3]*SIGMA*dx)
 
-def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER, Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC):
+def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER, Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC):
   if Gaussian_FIT:
      MODEL_FIT = "Gaussian"
   elif Lorentzian_FIT:
@@ -478,7 +478,7 @@ def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, X
   xp_sel_err = xp_sel_err1  
 
   if BLA:
-     print(f"\nDetection Of Extrema - Version {version} - Thibaut Merle - Verbose mode activated \n")
+     print(f"\nDetection Of Extrema - Version {VERSION} - Thibaut Merle - Verbose mode activated \n")
      if TYP == 'max':
          print(f"Cross-correlation function-like input (TYP = {TYP})")
      else:
@@ -501,8 +501,8 @@ def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, X
      print(f"\nNumber of ascending zeros on the third derivative:     {xp_tot.size}")   
      print("\nRelative threshold on the 2nd derivative:  THRES2   = ", THRES2*100, "% => Absolute threshold:", format(-thres2, '10.3e'))
      print(f"\nNumber of RV components kept on the second derivative: {xp_sel.size}")
-     for i, j in zip(xp_sel, xp_sel_err1, xp_sel_err2): 
-        print('{:8.3f} \u00B1 {:5.3f} {:5.3f}'.format(i, j), end=' ')
+     for i, j  in zip(xp_sel, xp_sel_err): 
+        print('{:8.3f} \u00B1 {:5.3f}'.format(i, j), end=' ')
      print()
 
 
@@ -922,7 +922,7 @@ def run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, X
 if __name__ == '__main__':
 
   #Default parameters
-  version = 2.0 # DOE version
+  VERSION = 2.1 # DOE version
   TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
   THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
   THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)
@@ -939,7 +939,7 @@ if __name__ == '__main__':
   np.set_printoptions(linewidth=sys.maxsize)
 
   #Command line arguments
-  parser = ap.ArgumentParser(description=f'Detection Of Extrema (DOE). Version {version}. Use successive derivatives to find blended components.', epilog='2022-11-06 Thibault Merle')
+  parser = ap.ArgumentParser(description=f'Detection Of Extrema (DOE). Version {VERSION}. Use successive derivatives to find blended components.', epilog='2022-11-06 Thibault Merle')
   #Positional
   parser.add_argument('ifn', help='Input filename [x, f] in unicode format or FITS (with CRVAL1 and CDELT1 defined).')
   #Optional -- general behaviour
@@ -1007,6 +1007,6 @@ if __name__ == '__main__':
   NC = args.m
   
 
-  run_doe(IFN, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER,\
+  run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER,\
         Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC)
 

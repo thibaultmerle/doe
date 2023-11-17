@@ -2,7 +2,7 @@
 
 ![Control plot](doe_banner.png)
 
-Version: 2.0 
+Version: 2.3 
 
 Contact: tmerle@ulb.ac.be 
 

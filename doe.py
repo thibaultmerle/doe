@@ -22,7 +22,7 @@
 #          *.png     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 #
 # History:
-# 20231117: Set the arguments of run_doe as one positional and all the other optional
+# 20231117: Set the arguments of run_doe as one positional and all the other optional+ outuput dictionary
 # 20231106: Set the main part of the code in a function run_doe to be used in import
 # 20221106: Add the values of velocities, errors and widths on the plot
 #         : Add the '-m' option to force the number of components to fit
@@ -45,7 +45,7 @@ from matplotlib.ticker import MaxNLocator
 from scipy.optimize import curve_fit, leastsq
 
 #Default parameters
-VERSION = 2.3 # DOE version
+VERSION = 2.4 # DOE version
 TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
 THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
 THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)
@@ -612,6 +612,7 @@ def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, 
      n_mmf = popt[npar::npar]   # normalisation factor
      idx = mu_mmf.argsort() # Index of the sorted increasing radial velocities     
      mu_mmf  = mu_mmf[idx]
+     mu_mmf_err = mu_mmf_err[idx]
      n_mmf = n_mmf[idx] 
 
      #For the Gaussian fit with LEASTSQ
@@ -931,6 +932,16 @@ def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, 
         plt.show()
      else:
         plt.draw()
+   
+  xp_fit = (6*[np.nan*wp.size])
+  #Prepare the return of the function
+  if MODEL_FIT == 'Gaussian':
+     xp_fit = (mu_mmf, mu_mmf_err, sig_mmf, n_mmf, c_mmf*np.ones(wp.size))
+  elif MODEL_FIT in ["Lorentzian", "Voigtian", 'rotational']:
+     print('Lorentzian, Voigtian and rotational output setup not yet implemented.')
+     input()
+        
+  return {'xp_sel':xp_sel, 'xp_sel_err': xp_sel_err, 'xp_fit': xp_fit}
 
 
 #######################################################################################
@@ -980,9 +991,12 @@ if __name__ == '__main__':
   
   args = parser.parse_args()
   
-  run_doe(args.ifn, VERSION=VERSION, BLA=args.verbose, TYP=args.type, PLT=args.plot, EXT_NUMBER=args.extension_number, NO_OUTPUTS=args.ignore_outputs, NO_OUTPUT2=args.ignore_output2,\
-          THRES0=args.thres0, THRES2=args.thres2, SIGMA0=args.sigma, N=args.n, N_OFFSET=args.n_offset, ONE_PASS=args.one_pass,\
-          COMPTOL=args.comptol, Gaussian_FIT=args.Gaussian_fit, Lorentzian_FIT=args.Lorentzian_fit, Voigtian_FIT=args.Voigtian_fit, ROTATIONAL_FIT=args.rotational_fit, NC=args.m,\
-          XMIN=args.xmin, XMAX=args.xmax, YMIN=args.ymin, YMAX=args.ymax, NOT=args.no_title, LAB=args.label, PURE_DER=args.pure_derivative)
+  res = run_doe(args.ifn, VERSION=VERSION, BLA=args.verbose, TYP=args.type, PLT=args.plot, EXT_NUMBER=args.extension_number, NO_OUTPUTS=args.ignore_outputs, NO_OUTPUT2=args.ignore_output2,\
+                THRES0=args.thres0, THRES2=args.thres2, SIGMA0=args.sigma, N=args.n, N_OFFSET=args.n_offset, ONE_PASS=args.one_pass,\
+                COMPTOL=args.comptol, Gaussian_FIT=args.Gaussian_fit, Lorentzian_FIT=args.Lorentzian_fit, Voigtian_FIT=args.Voigtian_fit, ROTATIONAL_FIT=args.rotational_fit, NC=args.m,\
+                XMIN=args.xmin, XMAX=args.xmax, YMIN=args.ymin, YMAX=args.ymax, NOT=args.no_title, LAB=args.label, PURE_DER=args.pure_derivative)
+  
+  #print(res)
+
 
 

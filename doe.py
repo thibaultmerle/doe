@@ -22,6 +22,7 @@
 #          *.png     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 #
 # History:
+# 20231117: Set the arguments of run_doe a dictionary
 # 20231106: Set the main part of the code in a function run_doe to be used in import
 # 20221106: Add the values of velocities, errors and widths on the plot
 #         : Add the '-m' option to force the number of components to fit
@@ -269,7 +270,35 @@ def load_fits(finp, extn, verb):
 #def method_err(SIGMA, dx, popt):
 #  return abs(popt[0] + popt[1]*SIGMA + popt[2]*dx + popt[3]*SIGMA*dx)
 
-def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER, Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ, NP_MAX):
+def run_doe(args):
+  #Read input line command arguments 
+  IFN = args['ifn']
+  BLA = args['verbose']
+  PLT = args['plot']
+  TYP = args['type']
+  ONE_PASS = args['one_pass'] # If True no iteration on SIGMA allowed
+  THRES0 = args['thres0']
+  THRES2 = args['thres2']
+  SIGMA0 = args['sigma']
+  N = args['n']
+  N_OFFSET = args['n_offset']
+  XMIN = args['xmin']
+  XMAX = args['xmax']
+  YMIN = args['ymin']
+  YMAX = args['ymax']
+  NOT = args['no_title']
+  LAB = args['label']
+  PURE_DER = args['pure_derivative']
+  EXT_NUMBER = args['extension_number']
+  Gaussian_FIT = args['Gaussian_fit']
+  Lorentzian_FIT = args['Lorentzian_fit']
+  Voigtian_FIT = args['Voigtian_fit']
+  ROTATIONAL_FIT = args['rotational_fit']
+  COMPTOL = args['comptol']
+  NO_OUTPUTS = args['ignore_outputs']
+  NO_OUTPUT2 = args['ignore_output2']
+  NC = args['m']
+
   if Gaussian_FIT:
      MODEL_FIT = "Gaussian"
   elif Lorentzian_FIT:
@@ -835,7 +864,7 @@ def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_
   
      if not XMIN and not XMAX:
         if TYP == 'max':
-           plt1.set_xlim([min(x)-1.2*Dx, max(x)+1.2*Dx])  
+           plt1.set_xlim([min(x)-1.6*Dx, max(x)+1.6*Dx])  
            #plt1.set_xlim([min(x), max(x)])
         else:
            plt1.set_xlim([min(x), max(x)])
@@ -922,7 +951,7 @@ def run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_
 if __name__ == '__main__':
 
   #Default parameters
-  VERSION = 2.1 # DOE version
+  VERSION = 2.2 # DOE version
   TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
   THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
   THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)
@@ -976,37 +1005,11 @@ if __name__ == '__main__':
   group3.add_argument('-lab', '--label', type=str, default=None, help='Display a label in place of title.')
   group3.add_argument('--pure_derivative', action='store_true', default=False, help='Show the pure derivative without smoothing.')
   
-  args = parser.parse_args()
-  
-  #Read input line command arguments 
-  IFN = args.ifn
-  BLA = args.verbose
-  PLT = args.plot
-  TYP = args.type
-  ONE_PASS = args.one_pass # If True no iteration on SIGMA allowed
-  THRES0 = args.thres0
-  THRES2 = args.thres2
-  SIGMA0 = args.sigma
-  N = args.n
-  N_OFFSET = args.n_offset
-  XMIN = args.xmin
-  XMAX = args.xmax
-  YMIN = args.ymin
-  YMAX = args.ymax
-  NOT = args.no_title
-  LAB = args.label
-  PURE_DER = args.pure_derivative
-  EXT_NUMBER = args.extension_number
-  Gaussian_FIT = args.Gaussian_fit
-  Lorentzian_FIT = args.Lorentzian_fit
-  Voigtian_FIT = args.Voigtian_fit
-  ROTATIONAL_FIT = args.rotational_fit
-  COMPTOL = args.comptol
-  NO_OUTPUTS = args.ignore_outputs
-  NO_OUTPUT2 = args.ignore_output2
-  NC = args.m
+  args = vars(parser.parse_args())
+
+  run_doe(args)
   
 
-  run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER,\
-        Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ, NP_MAX)
+ # run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER,\
+ #       Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ, NP_MAX)
 

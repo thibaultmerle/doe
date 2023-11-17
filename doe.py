@@ -22,7 +22,7 @@
 #          *.png     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 #
 # History:
-# 20231117: Set the arguments of run_doe a dictionary
+# 20231117: Set the arguments of run_doe as one positional and all the other optional
 # 20231106: Set the main part of the code in a function run_doe to be used in import
 # 20221106: Add the values of velocities, errors and widths on the plot
 #         : Add the '-m' option to force the number of components to fit
@@ -43,6 +43,21 @@ from scipy import special  # for fitting a Voigt profile
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from scipy.optimize import curve_fit, leastsq
+
+#Default parameters
+VERSION = 2.3 # DOE version
+TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
+THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
+THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)
+PLT = False
+MODEL_FIT = None # Name of the mixture model function use to fit the peaks
+NP_MAX = 5 # Maximum number of peak positions written on the plot
+# 
+DSIGMA = 2    # [km/s or Å] Step on the SIGMA parameter use for iteration  (when ONE_PASS = False)
+N_OFFSET = 10 # Number of points selected on the left and right of the selected CCF and derivatives in addition to imin and imax
+#POPT_ERR = [0.0000, -0.0000, -0.0000,  0.0000] # Internal + CCF sampling error estimation using script_fit_bias_precision.py 
+LEASTSQ = False #Internal option to compare with a Gaussian fit from the scipy.optimize.leastsq
+
 
 def find_widths(x, xp, ggf):
    ''' Find width for a given peak using the second derivative
@@ -270,34 +285,7 @@ def load_fits(finp, extn, verb):
 #def method_err(SIGMA, dx, popt):
 #  return abs(popt[0] + popt[1]*SIGMA + popt[2]*dx + popt[3]*SIGMA*dx)
 
-def run_doe(args):
-  #Read input line command arguments 
-  IFN = args['ifn']
-  BLA = args['verbose']
-  PLT = args['plot']
-  TYP = args['type']
-  ONE_PASS = args['one_pass'] # If True no iteration on SIGMA allowed
-  THRES0 = args['thres0']
-  THRES2 = args['thres2']
-  SIGMA0 = args['sigma']
-  N = args['n']
-  N_OFFSET = args['n_offset']
-  XMIN = args['xmin']
-  XMAX = args['xmax']
-  YMIN = args['ymin']
-  YMAX = args['ymax']
-  NOT = args['no_title']
-  LAB = args['label']
-  PURE_DER = args['pure_derivative']
-  EXT_NUMBER = args['extension_number']
-  Gaussian_FIT = args['Gaussian_fit']
-  Lorentzian_FIT = args['Lorentzian_fit']
-  Voigtian_FIT = args['Voigtian_fit']
-  ROTATIONAL_FIT = args['rotational_fit']
-  COMPTOL = args['comptol']
-  NO_OUTPUTS = args['ignore_outputs']
-  NO_OUTPUT2 = args['ignore_output2']
-  NC = args['m']
+def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, NO_OUTPUTS=False, NO_OUTPUT2=False, THRES0=THRES0, THRES2=THRES2, SIGMA0=None, N=None, N_OFFSET=N_OFFSET, ONE_PASS=False, COMPTOL=20, Gaussian_FIT=False, Lorentzian_FIT=False, Voigtian_FIT=False, ROTATIONAL_FIT=False, NC=0, XMIN=None, XMAX=None, YMIN=None, YMAX=None, NOT=False, LAB=None, PURE_DER=False):
 
   if Gaussian_FIT:
      MODEL_FIT = "Gaussian"
@@ -950,21 +938,6 @@ def run_doe(args):
 
 if __name__ == '__main__':
 
-  #Default parameters
-  VERSION = 2.2 # DOE version
-  TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
-  THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
-  THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)
-  PLT = False
-  MODEL_FIT = None # Name of the mixture model function use to fit the peaks
-  NP_MAX = 5 # Maximum number of peak positions written on the plot
-  # 
-  DSIGMA = 2    # [km/s or Å] Step on the SIGMA parameter use for iteration  (when ONE_PASS = False)
-  N_OFFSET = 10 # Number of points selected on the left and right of the selected CCF and derivatives in addition to imin and imax
-  #POPT_ERR = [0.0000, -0.0000, -0.0000,  0.0000] # Internal + CCF sampling error estimation using script_fit_bias_precision.py
-  
-  LEASTSQ = False #Internal option to compare with a Gaussian fit from the scipy.optimize.leastsq
-
   np.set_printoptions(linewidth=sys.maxsize)
 
   #Command line arguments
@@ -989,7 +962,7 @@ if __name__ == '__main__':
   group2.add_argument('-1', '--one_pass', action='store_true', default=False, help='One pass without automatic adjustment of SIGMA (no iteration)')
   #Optional -- Fitting parameters
   group4 = parser.add_argument_group('Fitting parameters')
-  group4.add_argument('--comptol', type=float, default=20, help='Fit tolerance on x position for each x component in km/s or Å (default: 100).')
+  group4.add_argument('--comptol', type=float, default=20, help='Fit tolerance on x position for each x component in km/s or Å (default: 20).')
   group4.add_argument('-G', '--Gaussian_fit', action='store_true', default=False, help='Fit the detected peaks with Gaussian function and give the velocities fitted on the line command.')
   group4.add_argument('-L', '--Lorentzian_fit', action='store_true', default=False, help='Fit the detected peaks with Lorentzian function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
   group4.add_argument('-V', '--Voigtian_fit', action='store_true', default=False, help='Fit the detected peaks with Voigt function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
@@ -1005,11 +978,11 @@ if __name__ == '__main__':
   group3.add_argument('-lab', '--label', type=str, default=None, help='Display a label in place of title.')
   group3.add_argument('--pure_derivative', action='store_true', default=False, help='Show the pure derivative without smoothing.')
   
-  args = vars(parser.parse_args())
-
-  run_doe(args)
+  args = parser.parse_args()
   
+  run_doe(args.ifn, VERSION=VERSION, BLA=args.verbose, TYP=args.type, PLT=args.plot, EXT_NUMBER=args.extension_number, NO_OUTPUTS=args.ignore_outputs, NO_OUTPUT2=args.ignore_output2,\
+          THRES0=args.thres0, THRES2=args.thres2, SIGMA0=args.sigma, N=args.n, N_OFFSET=args.n_offset, ONE_PASS=args.one_pass,\
+          COMPTOL=args.comptol, Gaussian_FIT=args.Gaussian_fit, Lorentzian_FIT=args.Lorentzian_fit, Voigtian_FIT=args.Voigtian_fit, ROTATIONAL_FIT=args.rotational_fit, NC=args.m,\
+          XMIN=args.xmin, XMAX=args.xmax, YMIN=args.ymin, YMAX=args.ymax, NOT=args.no_title, LAB=args.label, PURE_DER=args.pure_derivative)
 
- # run_doe(IFN, VERSION, BLA, PLT, TYP, ONE_PASS, THRES0, THRES2, SIGMA0, N, N_OFFSET, XMIN, XMAX, YMIN, YMAX, NOT, LAB, PURE_DER, EXT_NUMBER,\
- #       Gaussian_FIT, Lorentzian_FIT, Voigtian_FIT, ROTATIONAL_FIT, COMPTOL, NO_OUTPUTS, NO_OUTPUT2, NC, LEASTSQ, NP_MAX)
 

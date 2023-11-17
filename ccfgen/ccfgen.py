@@ -17,8 +17,8 @@ vmin, vmax = -400, 400	    # Velocity range in km/s
 noise_offset = 0.0          
 noise_amplitude = 0.1
 
-ofn1 = f'ccfgen_{spectral_resolution}_{ncomp}_components.dat'
-ofn2 = f'ccfgen_{spectral_resolution}_{ncomp}_components.npy'
+ofn1 = f'ccf_{spectral_resolution}_{ncomp}_components.dat'
+ofn2 = f'ccf_{spectral_resolution}_{ncomp}_components.npy'
 
 velocity_elt = 299792.458/spectral_resolution
 dv = round(velocity_elt/4, 1)

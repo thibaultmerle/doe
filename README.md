@@ -107,7 +107,7 @@ Other mixture model functions are available: Lorentzian profile `-L`, Voigtian p
 ---
 
 ## Refereed publications using `doe`
-- Van der Swaelmen et al. 2023, accepted in A&A
+- [Van der Swaelmen et al. 2023, accepted in A&A](https://ui.adsabs.harvard.edu/abs/2023arXiv231204721V/abstract)
 - [Merle et al. 2022, Nature Astronomy, 6, 681](https://rdcu.be/cNqC2)
 - [Traven et al. 2020, A&A,638, 145](https://ui.adsabs.harvard.edu/abs/2020A%26A...638A.145T/abstract)
 - [Merle et al. 2020, A&A, 635, 155](https://ui.adsabs.harvard.edu/abs/2020A%26A...635A.155M/abstract)

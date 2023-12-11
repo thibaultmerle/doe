@@ -118,7 +118,7 @@ Other mixture model functions are available: Lorentzian profile `-L`, Voigtian p
 
 ## Dependencies
 
-Excepted the standard library, `doe` relies on:
+Excepted the Python standard library, `doe` relies on:
 - numpy
 - scipy
 - matplotlib

@@ -285,7 +285,7 @@ def load_fits(finp, extn, verb):
 #def method_err(SIGMA, dx, popt):
 #  return abs(popt[0] + popt[1]*SIGMA + popt[2]*dx + popt[3]*SIGMA*dx)
 
-def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, NO_OUTPUTS=False, NO_OUTPUT2=False, THRES0=THRES0, THRES2=THRES2, SIGMA0=None, N=None, N_OFFSET=N_OFFSET, ONE_PASS=False, COMPTOL=20, Gaussian_FIT=False, Lorentzian_FIT=False, Voigtian_FIT=False, ROTATIONAL_FIT=False, NC=0, XMIN=None, XMAX=None, YMIN=None, YMAX=None, NOT=False, LAB=None, PURE_DER=False):
+def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, NO_OUTPUTS=False, NO_OUTPUT2=False, THRES0=THRES0, THRES2=THRES2, SIGMA0=None, N=None, N_OFFSET=N_OFFSET, ONE_PASS=False, COMPTOL=20, Gaussian_FIT=False, Lorentzian_FIT=False, Voigtian_FIT=False, ROTATIONAL_FIT=False, NC=0, NP=0, XMIN=None, XMAX=None, YMIN=None, YMAX=None, NOT=False, LAB=None, PURE_DER=False):
 
   if Gaussian_FIT:
      MODEL_FIT = "Gaussian"
@@ -584,8 +584,18 @@ def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, 
      elif MODEL_FIT == "rotational":
         mmf = rmm
     
-     try:
+     if NP:
+       m = np.zeros(len(x), dtype=bool)
+       for xp, exp in zip(xp_sel, xp_sel_err):
+         i = np.argmin(abs(x-xp))
+         m[i-NP:i+NP+1] = True 
+         xfit = x[m]
+         ffit = f[m]
+     else:
+         xfit = x.copy()
+         ffit = f.copy() 
 
+     try:
         popt, pcov = curve_fit(mmf, x, f, p0=guess, bounds=(lbounds, ubounds))
         perr = np.sqrt(np.diag(pcov))
      except:
@@ -979,6 +989,7 @@ if __name__ == '__main__':
   group4.add_argument('-V', '--Voigtian_fit', action='store_true', default=False, help='Fit the detected peaks with Voigt function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
   group4.add_argument('-R', '--rotational_fit', action='store_true', default=False, help='Fit the detected peaks with rotational function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
   group4.add_argument('-m', type=int, default=0, help='Number of components to fit (it forces DOE to fit this number of RV components).')
+  group4.add_argument('-np', type=int, default=0, help='Number of x points taken around each peak detected.')
   #Optional -- Graphical parameters
   group3 = parser.add_argument_group('Graphical parameters')
   group3.add_argument('-xmin', '--xmin', type=float, default=None, help='x minimum value for the plot')
@@ -993,7 +1004,7 @@ if __name__ == '__main__':
   
   res = run_doe(args.ifn, VERSION=VERSION, BLA=args.verbose, TYP=args.type, PLT=args.plot, EXT_NUMBER=args.extension_number, NO_OUTPUTS=args.ignore_outputs, NO_OUTPUT2=args.ignore_output2,\
                 THRES0=args.thres0, THRES2=args.thres2, SIGMA0=args.sigma, N=args.n, N_OFFSET=args.n_offset, ONE_PASS=args.one_pass,\
-                COMPTOL=args.comptol, Gaussian_FIT=args.Gaussian_fit, Lorentzian_FIT=args.Lorentzian_fit, Voigtian_FIT=args.Voigtian_fit, ROTATIONAL_FIT=args.rotational_fit, NC=args.m,\
+                COMPTOL=args.comptol, Gaussian_FIT=args.Gaussian_fit, Lorentzian_FIT=args.Lorentzian_fit, Voigtian_FIT=args.Voigtian_fit, ROTATIONAL_FIT=args.rotational_fit, NC=args.m, NP=args.np,\
                 XMIN=args.xmin, XMAX=args.xmax, YMIN=args.ymin, YMAX=args.ymax, NOT=args.no_title, LAB=args.label, PURE_DER=args.pure_derivative)
   
   #print(res)

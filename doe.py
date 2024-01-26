@@ -46,7 +46,7 @@ from matplotlib.ticker import MaxNLocator
 from scipy.optimize import curve_fit, leastsq
 
 #Default parameters
-VERSION = 2.4 # DOE version
+VERSION = 2.5 # DOE version
 TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
 THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
 THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)

@@ -22,6 +22,7 @@
 #          *.png     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 #
 # History:
+# 20240126: Add the '-np' option for fitting only NP points around each peak detected
 # 20231117: Set the arguments of run_doe as one positional and all the other optional+ outuput dictionary
 # 20231106: Set the main part of the code in a function run_doe to be used in import
 # 20221106: Add the values of velocities, errors and widths on the plot
@@ -596,7 +597,7 @@ def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, 
          ffit = f.copy() 
 
      try:
-        popt, pcov = curve_fit(mmf, x, f, p0=guess, bounds=(lbounds, ubounds))
+        popt, pcov = curve_fit(mmf, xfit, ffit, p0=guess, bounds=(lbounds, ubounds))
         perr = np.sqrt(np.diag(pcov))
      except:
         print("MODEL_FIT FAILED")
@@ -692,7 +693,9 @@ def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, 
   
   if BLA:
     if MODEL_FIT:
-       print(f'Tolerance for each component: COMPTOL = {COMPTOL} {unit}')
+       print(f'Tolerance for each component:          COMPTOL = {COMPTOL} {unit}')
+       if NP:
+         print(f'Number of points selected around each peak: NP = {NP}')
        #print('guess: ', guess)
        #print('popt: ', popt)
        #print('pcov:', pcov)
@@ -795,6 +798,8 @@ def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, 
                     plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
            if LEASTSQ:    
              plt1.plot(x, fit2, 'g-', label='Gaussian fit (leastsq)')          
+           if NP:
+             plt1.plot(xfit, ffit, '.r', label='Used in the fit')
         #plt1.axhline(y=min(f0), ls='dotted', color='0.00')
         plt1.axhline(y=thres0, ls='solid', color='r', lw=0.5)
      elif TYP == 'min':

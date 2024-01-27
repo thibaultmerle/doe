@@ -949,7 +949,7 @@ def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, 
         plt.draw()
    
   #xp_fit = (6*[np.nan*wp.size])
-  xp_fit = (np.array(np.nan), np.array(np.nan), np.array(np.nan), np.array(np.nan), np.array(np.nan), np.array(np.nan))
+  xp_fit = (np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]))
   #Prepare the return of the function
   if MODEL_FIT == 'Gaussian':
      xp_fit = (mu_mmf, mu_mmf_err, sig_mmf, n_mmf, c_mmf*np.ones(wp.size))

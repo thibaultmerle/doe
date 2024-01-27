@@ -29,7 +29,7 @@ To see a description of all the command line options (general behaviour, code, f
 
 ### Code I/O
 
-- **Input**:  one dat (for a CCF) or fits (for a spectrum) input file  (unicode file with 2 columns [abscissa ordinates] or FITS file (with CRVAL1 and CDELT1 keywords))
+- **Input**:  one dat (for a CCF) or fits (for a spectrum) input file  (unicode file with 2 columns [abscissa ordinates] or FITS file (with CRVAL1 and CDELT1 keywords)). Since v2.1 also accept npy format.
 - **Outputs**:
   -  *_sd.dat  (selected successives derivatives [abscissa ordinates 1st 2nd 3rd])
   -  *_xp.dat  (peaks properties [x x_err f width xwmin xwmax sigma it]

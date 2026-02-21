@@ -71,7 +71,7 @@ def main():
         sys.exit(1)
 
     # Setup file names
-    base_name = args.output if args.output else f"ccf_{args.resolution}_{ncomp}_components"
+    base_name = args.output if args.output else f"ccf_{args.resolution}_{ncomp}_comp"
     ofn_dat = f"{base_name}.dat"
     ofn_npy = f"{base_name}.npy"
     ofn_png = f"{base_name}.png"

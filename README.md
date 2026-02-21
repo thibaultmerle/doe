@@ -10,7 +10,7 @@
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 - [Overview](#overview)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -22,7 +22,7 @@
 
 ---
 
-## 🔍 Overview
+## Overview
 
 In brief, `doe` takes as input the CCF of a given spectrum and returns the number of peaks present. It computes the first, second, and third derivatives of the CCF by convolving it with a narrow Gaussian kernel. This technique allows for simultaneous smoothing and differentiation, avoiding the numerical noise typical of discrete differentiation. 
 
@@ -33,7 +33,7 @@ The tool disentangles CCF components by identifying inflection points (local min
 
 ---
 
-## ⚙️ Installation
+## Installation
 
 To use `doe`, clone the repository and ensure you have the required dependencies:
 
@@ -49,7 +49,7 @@ pip install numpy scipy matplotlib
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Help & Usage
 To see a description of all command-line options (fitting, graphical parameters, etc.):
@@ -73,7 +73,7 @@ Other profiles: `-L` (Lorentzian), `-V` (Voigtian), and `-R` (Rotational).
 
 ---
 
-## 📥 I/O Formats
+## I/O Formats
 
 ### Input
 `doe` accepts the following input formats:
@@ -91,7 +91,7 @@ The tool generates several output files depending on the options:
 
 ---
 
-## 🛠️ Advanced Options
+## Advanced Options
 
 Optimize component detection using these three parameters:
 
@@ -109,7 +109,7 @@ python doe.py ccfgen/ccf_40000.dat -s 4
 
 ---
 
-## 📚 Refereed Publications using `doe`
+## Refereed Publications using `doe`
 
 `doe` has been used in several peer-reviewed studies:
 
@@ -122,7 +122,7 @@ python doe.py ccfgen/ccf_40000.dat -s 4
 
 ---
 
-## 📦 Dependencies
+## Dependencies
 
 - **Python 3.x**
 - **NumPy**
@@ -131,7 +131,7 @@ python doe.py ccfgen/ccf_40000.dat -s 4
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **GNU General Public License v3.0** - see the `LICENSE` file for details.
 

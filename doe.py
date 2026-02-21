@@ -794,7 +794,7 @@ def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, 
             SIGMA0 = 20 * len(x) / (Dx * 3.e5 / x.mean()) if Dx > 0 else 1.0
 
     # Output file names
-    parstr = f"_doe_{THRES0:3.2f}_{THRES2:3.2f}_{SIGMA0:3.2f}_{N_OFFSET:0>3.0f}"
+    parstr = f"_doe_{THRES0:3.2f}_{THRES2:3.2f}_{SIGMA0:3.1f}_{N_OFFSET:0>2.0f}"
     OFN1 = op.basename(IFN[:-4]) + parstr + '_xp.dat' 
     OFN2 = op.basename(IFN[:-4]) + parstr + '_sd.dat' 
     OFN3 = op.basename(IFN[:-4]) + parstr + '.png' if PLT else None

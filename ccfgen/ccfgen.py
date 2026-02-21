@@ -71,7 +71,11 @@ def main():
         sys.exit(1)
 
     # Setup file names
-    base_name = args.output if args.output else f"ccf_{args.resolution}_{ncomp}_comp"
+    if args.output:
+        base_name = args.output
+    else:
+        res_label = f"{args.resolution//1000}k" if args.resolution % 1000 == 0 else str(args.resolution)
+        base_name = f"R{res_label}_{ncomp}comp"
     ofn_dat = f"{base_name}.dat"
     ofn_npy = f"{base_name}.npy"
     ofn_png = f"{base_name}.png"

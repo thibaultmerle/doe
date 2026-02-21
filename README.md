@@ -60,14 +60,14 @@ python doe.py -h
 ### 2. Basic Detection
 Run `doe` on a sample CCF from the `ccfgen` directory:
 ```bash
-python doe.py ccfgen/ccf_20000.dat -pp
+python doe.py ccfgen/R20k_3comp.dat -pp
 ```
 *The `-pp` option displays an interactive control plot.*
 
 ### 3. Fitting Peaks
 To fit a model mixture function made of Gaussians, use the `-G` option:
 ```bash
-python doe.py ccfgen/ccf_20000.dat -pp -G
+python doe.py ccfgen/R20k_3comp.dat -pp -G
 ```
 Other profiles: `-L` (Lorentzian), `-V` (Voigtian), and `-R` (Rotational).
 
@@ -104,7 +104,7 @@ Optimize component detection using these three parameters:
 **Example: Detecting blended components**
 If a default run only finds 2 peaks, try narrowing the kernel:
 ```bash
-python doe.py ccfgen/ccf_40000.dat -s 4
+python doe.py ccfgen/R40k_3comp.dat -s 4
 ```
 
 ---

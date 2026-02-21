@@ -38,7 +38,7 @@ python ccfgen.py -R 40000 -v -25.0 10.0 90.0 -a 1.0 0.8 0.4 -s 8 8 12
 
 ## Outputs
 
-The script generates three files per run (based on the resolution and number of components):
+The script generates three files per run (based on the resolution and number of components, e.g., `R60k_3comp.dat`):
 
 1.  **`.dat`**: A text file with two columns: `Velocity (km/s)` and `Normalized Intensity`.
 2.  **`.npy`**: A NumPy binary file containing the same data for fast loading in Python.

@@ -1,7 +1,7 @@
 # `doe` — Detection Of Extrema
 
 [![Python Version](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-2.6-green.svg)](https://github.com/thibaultmerle/doe)
+[![Version](https://img.shields.io/badge/version-2.7-green.svg)](https://github.com/thibaultmerle/doe)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ![Control plot](doe_banner.png)

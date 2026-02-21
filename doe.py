@@ -22,6 +22,7 @@
 #          *.png     (if -p or -pp is given, plot of the CCF and its successive derivatives)
 #
 # History:
+# 20260221: Massive code refactoring (split large run_doe into multiple sub-functions) and syntax warning fixes
 # 20240126: Add the '-np' option for fitting only NP points around each peak detected
 # 20231117: Set the arguments of run_doe as one positional and all the other optional+ outuput dictionary
 # 20231106: Set the main part of the code in a function run_doe to be used in import
@@ -46,7 +47,7 @@ from matplotlib.ticker import MaxNLocator
 from scipy.optimize import curve_fit, leastsq
 
 #Default parameters
-VERSION = 2.6 # DOE version
+VERSION = 2.7 # DOE version
 TYP = 'max'   # Kind of detection (min for absorption spectrum, max for cross-correlation function)
 THRES0 = 0.3  # Default threshold on the CCF (in % of the full amplitude)
 THRES2 = 0.1  # Default threshold on the 2nd derivative (in % of the full amplitude)
@@ -283,681 +284,648 @@ def load_fits(finp, extn, verb):
 
     return x, y
 
+def load_data(ifn, typ, ext_number, verb):
+    """
+    Load data from FITS, NPY, or TXT file and perform initial preprocessing based on TYP.
+    """
+    if ifn.endswith('.fits') or ifn.endswith('.fit'):
+        x_inp, f_inp = load_fits(ifn, ext_number, verb)
+    elif ifn.endswith('.npy'):
+        idata = np.load(ifn)
+        x_inp, f_inp = idata[0], idata[1]
+    else:
+        x_inp, f_inp = np.loadtxt(ifn, unpack=True, usecols=(0, 1))
+
+    # Reverse the input data to detect only maxima
+    if typ == 'min':
+        f_inp = 1 - f_inp
+        unit = 'Å'
+    else:
+        unit = 'km/s'
+
+    # Remove absolute very high value probably coming from badly formatted input data
+    idx, = np.where(abs(f_inp) < 1.e30)
+    if list(idx) != []:
+        x0 = x_inp[idx]
+        f0 = f_inp[idx]
+    else:
+        x0 = x_inp
+        f0 = f_inp
+
+    return x0, f0, unit
+
+
+def select_data_range(x0, f0, thres0_rel, n_offset):
+    """
+    Select data range based on the intensity threshold.
+    """
+    thres0 = thres0_rel * np.ptp(f0) + min(f0)
+    nr = len(x0)
+    idx_f0, = np.where(f0[:] > thres0)
+
+    if not len(idx_f0):
+        return x0, f0, thres0
+
+    i_plus = 1 if min(idx_f0) > 0 else 0
+    imin = min(idx_f0) - i_plus
+
+    i_plus = 2 if max(idx_f0) < nr - 1 else 0
+    imax = max(idx_f0) + i_plus
+
+    idx_start = max(0, imin - n_offset)
+    idx_end = min(nr, imax + n_offset)
+
+    return x0[idx_start:idx_end], f0[idx_start:idx_end], thres0
+
+
+def preprocess_data(x, f, n_interp=None):
+    """
+    Interpolate and normalize the selected data range.
+    """
+    if n_interp:
+        if n_interp < f.size:
+            print(f'The number of interpolated points {n_interp} should be larger than the selection {x.size} (change -n option).')
+            sys.exit(1)
+        xi = np.linspace(min(x), max(x), int(n_interp / x.size) * len(x))
+        fi = np.interp(xi, x, f)
+        x, f = xi, fi
+
+    dx = x[1] - x[0]
+    if dx < 0.:
+        x = x[::-1]
+        f = f[::-1]
+        dx = x[1] - x[0]
+
+    return x, f, dx
+
+
+def compute_smoothed_derivatives(f, sigma, dx):
+    """
+    Compute 1st, 2nd, and 3rd derivatives convolved with a Gaussian kernel.
+    """
+    dxdx = dx**2
+    dxdxdx = dx**3
+
+    gf = ndimage.gaussian_filter1d(f, sigma=sigma, order=1, mode='nearest') / dx
+    ggf = ndimage.gaussian_filter1d(f, sigma=sigma, order=2, mode='nearest') / dxdx
+    gggf = ndimage.gaussian_filter1d(f, sigma=sigma, order=3, mode='nearest') / dxdxdx
+    
+    return gf, ggf, gggf
+
+
+def compute_pure_derivatives(x0, f0):
+    """
+    Compute pure finite-difference derivatives.
+    """
+    f0d = np.diff(f0, 1)
+    f0dd = np.diff(f0d, 1)
+    f0ddd = np.diff(f0dd, 1)
+    x0d = x0[:-1]
+    x0dd = x0d[:-1]
+    x0ddd = x0dd[:-1]
+    return x0d, f0d, x0dd, f0dd, x0ddd, f0ddd
+
 #def method_err(SIGMA, dx, popt):
 #  return abs(popt[0] + popt[1]*SIGMA + popt[2]*dx + popt[3]*SIGMA*dx)
 
-def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, NO_OUTPUTS=False, NO_OUTPUT2=False, THRES0=THRES0, THRES2=THRES2, SIGMA0=None, N=None, N_OFFSET=N_OFFSET, ONE_PASS=False, COMPTOL=20, Gaussian_FIT=False, Lorentzian_FIT=False, Voigtian_FIT=False, ROTATIONAL_FIT=False, NC=0, NP=0, XMIN=None, XMAX=None, YMIN=None, YMAX=None, NOT=False, LAB=None, PURE_DER=False):
+def fit_components(x, f, x0, f0, xp_sel, fp_sel, wp, model_fit, nc, comptol, np_points, leastsq_flag, ncal):
+    """
+    Fit the selected peaks using a specified mixture model.
+    """
+    if nc == 0:
+        if model_fit in ["Gaussian", "Lorentzian"]:
+            npar = 3
+            guess = zip(xp_sel, wp/2, fp_sel)
+            lbounds = zip(xp_sel - comptol, 0 * wp, -np.inf * fp_sel)
+            ubounds = zip(xp_sel + comptol, +np.inf * wp, +np.inf * fp_sel)
+        elif model_fit == "Voigtian":
+            npar = 4
+            guess = zip(xp_sel, wp, wp, fp_sel)
+            lbounds = zip(xp_sel - comptol, -np.inf * wp, -np.inf * wp, -np.inf * fp_sel)
+            ubounds = zip(xp_sel + comptol, +np.inf * wp, +np.inf * wp, +np.inf * fp_sel)
+        elif model_fit == "rotational":
+            npar = 4
+            guess = zip(xp_sel, 0.6 * np.ones(wp.size), wp, fp_sel)
+            lbounds = zip(xp_sel - comptol, -np.inf * wp, -np.inf * wp, -np.inf * fp_sel)
+            ubounds = zip(xp_sel + comptol, +np.inf * wp, +np.inf * wp, +np.inf * fp_sel)
 
-  if Gaussian_FIT:
-     MODEL_FIT = "Gaussian"
-  elif Lorentzian_FIT:
-     MODEL_FIT = "Lorentzian"
-  elif Voigtian_FIT: 
-      MODEL_FIT = "Voigtian"
-  elif ROTATIONAL_FIT:
-      MODEL_FIT = "rotational"
-  else:
-      MODEL_FIT = None
-  
-  if TYP not in ('min', 'max'):
-     print('The type option -t accepts only "min" or "max" values.')
-     quit(1)
-  
-  #Load input data
-  if IFN.endswith('.fits') or IFN.endswith('.fit'):
-    x_inp, f_inp = load_fits(IFN, EXT_NUMBER, BLA)
-  elif IFN.endswith('.npy'):
-    idata = np.load(IFN)
-    x_inp, f_inp = idata[0], idata[1]
-  else:
-    x_inp, f_inp = np.loadtxt(IFN, unpack=True, usecols=(0, 1))
-  
-  #Reverse the input data to detect only maxima
-  if TYP == 'min':
-     f_inp = 1 - f_inp
-     unit = 'Å'
-  else:
-     unit = 'km/s'
-  
-  #Remove absolute very high value probably coming from badly formatted input data
-  idx, = np.where(abs(f_inp) < 1.e30)
-  if list(idx) != []:
-     x0 = x_inp[idx]
-     f0 = f_inp[idx]
-  else:
-     x0 = x_inp
-     f0 = f_inp
-  
-  #Threshold on the intensity
-  thres0 = THRES0 * np.ptp(f0) + min(f0) 
+    elif nc > 0:
+        vguess = [x[np.argmax(f)] + i * 15 for i in range(nc)]
+        fguess = [max(f) / (i + 1) for i in range(nc)]
+        if model_fit in ["Gaussian", "Lorentzian"]:
+            npar = 3
+            guess = zip(vguess, nc * [5.], fguess)
+            lbounds = zip(vguess - comptol * np.ones(nc), 0 * np.ones(nc), 0 * np.ones(nc))
+            ubounds = zip(vguess + comptol * np.ones(nc), +np.inf * np.ones(nc), +np.inf * np.ones(nc))
+        elif model_fit in ["Voigtian", "rotational"]:
+            npar = 4
+            vguess = [x[np.argmax(f)] + i * 3 for i in range(nc)]
+            guess = zip(vguess, nc * [0.6], nc * [5.], fguess)
+            lbounds = zip(vguess - comptol * np.ones(nc), -np.inf * np.ones(nc), 0 * np.ones(nc), -np.inf * np.ones(nc))
+            ubounds = zip(vguess + comptol * np.ones(nc), +np.inf * np.ones(nc), +np.inf * np.ones(nc), +np.inf * np.ones(nc))
+    else:
+        return None
 
-  #imin and imax are the index of the min and max of the range of selected intensity
-  NR = len(x0)
-  idx_f0, = np.where(f0[:] > thres0) 
-  
-  if min(idx_f0):
-      i_plus = 1
-  else:
-      i_plus = 0
-  
-  imin = min(idx_f0) - i_plus
-  
-  if max(idx_f0) < NR-1:
-      i_plus = 2
-  else:
-      i_plus = 0   
-  
-  imax = max(idx_f0) + i_plus
-  
-  #Selected data
-  if imin-N_OFFSET > 0 and imax+N_OFFSET < max(idx):
-     x = x0[imin-N_OFFSET:imax+N_OFFSET]
-     f = f0[imin-N_OFFSET:imax+N_OFFSET]
-  else:
-     x = x0[imin:imax]
-     f = f0[imin:imax]
-  
-  #Interpolation of selected data if required
-  if N:
-     if N < f.size:
-        print(f'The number of interpolated points {N} should be larger than the selection {x.size} (change -n option).')
-        quit(1)
-     xi = np.linspace(min(x), max(x), int(N/x.size)*len(x))
-     fi = np.interp(xi, x, f) 
-     x, f = xi, fi
-  
-  #Normalization:
-  dx = x[1] - x[0] # use np.diff(x) if x is not uniform
-  # case where the abscissa are in decreasing order
-  if dx < 0.:
-     x = x[::-1]
-     f = f[::-1]
-     dx = x[1] - x[0]
-  dxdx = dx**2
-  dxdxdx = dx**3
-  
-  #Normal derivation without smoothing
-  if PURE_DER:
-     f0d = np.diff(f0,1)
-     f0dd = np.diff(f0d,1)
-     f0ddd = np.diff(f0dd,1)
-     x0d = x0[:x0.size-1]
-     x0dd = x0d[:x0d.size-1]
-     x0ddd = x0dd[:x0dd.size-1] 
-  
-  #Range of selected data
-  Dx = max(x)-min(x)
-  
-  if not SIGMA0:
-     if TYP == 'max':
-        #SIGMA0 = 2*len(x)/Dx                  # Fully empirical
-        #SIGMA0 = np.ptp(x)/4
-        SIGMA0 = 3*dx 
-     elif TYP == 'min':
-        SIGMA0 = 20*len(x)/(Dx*3.e5/x.mean()) # Fully empirical
-     #ONE_PASS = True
-  
-  #Output file names
-  parstr = 'doe_'+format(THRES0, '3.2f')+'_'+format(THRES2, '3.2f')+'_'+format(SIGMA0, '3.2f')+'_'+format(N_OFFSET, '0>3.0f')
-  OFN1 = op.basename(IFN[:-4])+parstr+'_xp.dat' # Store the positions of the detected peaks
-  OFN2 = op.basename(IFN[:-4])+parstr+'_sd.dat' # Store the selected input data and their 3 successives derivatives
-  if PLT:
-     OFN3 = op.basename(IFN[:-4])+parstr+'.png' 
-  
-  #Initialization of the counter and the SIGMA value.
-  #The loop is performed on SIGMA adding DSIGMA at each iteration.
-  count = 0
-  SIGMA = SIGMA0
-  
-  while True:
-     # We use here the convolution with a Gaussian kernel (ndimage.Gaussian_filter1d) (f*g)
-     # which is equivalent to a smoothed version of df = np.diff(f) / dx
-     # Morevover,(f*g)' = f'*g = f*g'
-     # 
-     #First derivatives:
-     gf = ndimage.gaussian_filter1d(f, sigma=SIGMA, order=1, mode='nearest') / dx
-     #Second derivatives:
-     ggf = ndimage.gaussian_filter1d(f, sigma=SIGMA, order=2, mode='nearest') / dxdx
-     #Third derivatives:
-     gggf = ndimage.gaussian_filter1d(f, sigma=SIGMA, order=3, mode='nearest') / dxdxdx
-  
-     
-     xp_tot, fp_tot, ggfp_tot = find_peaks(x, f, ggf, gggf)
-     
-     #Threshold on the second derivative
-     thres2 = THRES2 * (max(ggf)-min(ggf))
-  
-     if len(xp_tot) < 1:
-        warn_text = "No peaks detected"
-        xp_sel = np.zeros(0)
-        xw = np.zeros(0)
-        NO_OUTPUTS = True
-        break
-  
-     #Selection of the peak according THRES0 and THRES2
-     #crit = np.logical_and(ggfp_tot < -thres2, fp_tot > thres0)
-     #Selection of the peak according THRES2 alone
-     crit = ggfp_tot < -thres2
-     idx = np.where(crit)[0]
-     
-     xp_sel = xp_tot[idx]
-     fp_sel = fp_tot[idx]
-     ggfp_sel = ggfp_tot[idx]
-  
-     if len(xp_sel) < 1:
-        warn_text = "No peaks selected"
-        xw = np.zeros(0)
-        NO_OUTPUTS = True      
-        break
-  
-     #Estimation of the width of each selected peak
-     xw, wp = find_widths(x, xp_sel, ggf)
-  
-     #print(xp_sel, wp, fp_sel)
-     #print(xwmin, xwmax)
+    guess = [min(f0)] + [i for sublist in guess for i in sublist]
+    lbounds = [min(f0) - 0.1 * np.ptp(f0)] + [i for sublist in lbounds for i in sublist]
+    ubounds = [min(f0) + 0.3 * np.ptp(f0)] + [i for sublist in ubounds for i in sublist]
 
-     xwmin = xw[::2]
-     xwmax = xw[1::2]
-
-     if xw.size == 0 or wp.size == 0:
-        warn_text = "Warning: DOE cannot measure the width of the second derivative! Maybe the SIGMA parameter is too high? Or use '-n' option to interpolate on more absicssa."
-        print(warn_text)
-        xw = np.nan*np.ones(xp_sel.size)
-        wp = np.nan*np.ones(xp_sel.size)
-        xwmin = np.nan*np.ones(xp_sel.size)
-        xwmax = np.nan*np.ones(xp_sel.size)        
-        #quit(1)
-
-     #print(f'xwmin: {xwmin}')
-     #print(f'xwmax: {xwmax}')
-  
-     # Iteration if the number of selected peak is not equal to the number of width in the 2nd derivative
-     if wp.size == 0 or len(set(wp)) == len(xp_sel) or ONE_PASS:
-        break
-     else:
-        count += 1
-        SIGMA += DSIGMA
-        if False:
-           print("count = ", count, ", SIGMA = ", SIGMA)
-
-
-  # Error of the method (valid for one component only)
-  # Lower value for more than one component
-  xp_sel_err1, xp_sel_err2 = [], []
-  for i in range(xp_sel.size):
-    #xp_sel_err.append(method_err(SIGMA, dx, POPT_ERR))
-    xp_sel_err1.append((x0[1]-x0[0])/2)
-    #Using Zucker 2003, MNRAS, 342, 1291 Eq. page 1293 
-    #print(f.size, fp_sel[i], ggfp_sel[i])
-    #print(-( f.size * ggfp_sel[i]/fp_sel[i] * 1/(1-1/fp_sel[i]**2) )**(-1))
-    xp_sel_err2.append(np.sqrt( abs( -(f.size * ggfp_sel[i]/fp_sel[i] * 1/(1-1/fp_sel[i]**2) )**(-1)) ))
-
-  #Select the type of error
-  xp_sel_err = xp_sel_err1  
-
-  if BLA:
-     print(f"\nDetection Of Extrema - Version {VERSION} - Thibaut Merle - Verbose mode activated \n")
-     if TYP == 'max':
-         print(f"Cross-correlation function-like input (TYP = {TYP})")
-     else:
-        print(f"Spectrum-like input (TYP = {TYP})")
-     print(f"Number of the abscissa points: NR = {NR}")
-     print(f"Step: dx = {dx:6.4f} {unit}")     
-     print("Relative threshold on the CCF/spectrum:    THRES0   = ", THRES0*100, "% => Absolute threshold:", format(thres0, '10.3e'))
-     print(f" Number of abscissa points selected:                           {imax-imin:>4d}")
-     print(f" Number of additional abscissa points on each side: N_OFFSET = {N_OFFSET:>4d}")
-     print(f" Total number of abscissa selected for the derivatives:        {imax-imin+2*N_OFFSET:>4d}")
-     if N:
-        print(f" Interpolation activated, number of abscissa:              N = {N:>4d}")
-     print(f" Interval of abscissa:    [{min(x)}, {max(x)}] {unit}, range of {np.ptp(x):8.3f} {unit}")
-     print("Initial derivative smoothing parameter:    SIGMA0   = ", format(SIGMA0, '4.1f'),' ', unit)
-     if count:
-        print(f"Automatic iteration performed to smooth the derivatives:")
-        print(f" Number of iterations:                 IT       = {count}")
-        print(f" Step in SIGMA:                        DSIGMA   = {DSIGMA}")
-        print(f' Final derivative smoothing parameter: SIGMA    = {SIGMA:5.1f} {unit}')
-     print(f"\nNumber of ascending zeros on the third derivative:     {xp_tot.size}")   
-     print("\nRelative threshold on the 2nd derivative:  THRES2   = ", THRES2*100, "% => Absolute threshold:", format(-thres2, '10.3e'))
-     print(f"\nNumber of RV components kept on the second derivative: {xp_sel.size}")
-     for i, j  in zip(xp_sel, xp_sel_err): 
-        print('{:8.3f} \u00B1 {:5.3f}'.format(i, j), end=' ')
-     print()
-
-
-  # fit with model functions of the detected peaks
-  if MODEL_FIT:
-    if BLA:
-        print(f'Fit the CCF with a {MODEL_FIT} mixture model.')
-        if NC:
-            print(f'/!\ User requires to fit {NC} components.')
-
-  if MODEL_FIT and NC == 0:     
-     if MODEL_FIT in ["Gaussian", "Lorentzian"]: 
-         npar = 3 # number of parameter for one profile
-         guess = zip(xp_sel, wp/2, fp_sel)
-         lbounds = zip(xp_sel-COMPTOL, 0*wp, -np.inf*fp_sel)
-         ubounds = zip(xp_sel+COMPTOL, +np.inf*wp, +np.inf*fp_sel)
-         # [(x0, y0, z0), (x1, y1, z1), ...]
-     elif MODEL_FIT == "Voigtian":
-         npar = 4
-         guess = zip(xp_sel, wp, wp, fp_sel)
-         lbounds = zip(xp_sel-COMPTOL, -np.inf*wp, -np.inf*wp, -np.inf*fp_sel)
-         ubounds = zip(xp_sel+COMPTOL, +np.inf*wp, +np.inf*wp, +np.inf*fp_sel)
-     elif MODEL_FIT == "rotational":
-         npar = 4
-         guess = zip(xp_sel, 0.6*np.ones(wp.size), wp, fp_sel)
-         lbounds = zip(xp_sel-COMPTOL, -np.inf*wp, -np.inf*wp, -np.inf*fp_sel)
-         ubounds = zip(xp_sel+COMPTOL, +np.inf*wp, +np.inf*wp, +np.inf*fp_sel)
-
-  if MODEL_FIT and NC > 0:
-    vguess = [x[np.argmax(f)] + i*15 for i in range(NC)] #Each component are initially separated by 5 or 15 km/s
-    #fguess = [max(f)/(2*i+1) for i in range(NC)] #Each component has an intensity divided by a factor of 3,5,7, etc.   
-    fguess = [max(f)/(i+1) for i in range(NC)] #Each component has an intensity divided by a factor of 2,3,4, etc.   
-    if MODEL_FIT in ["Gaussian", "Lorentzian"]:
-        npar = 3 # number of parameter for one profile
-        guess = zip(vguess, NC*[5.], fguess)
-        lbounds = zip(vguess-COMPTOL*np.ones(NC), 0*np.ones(NC), 0*np.ones(NC))
-        ubounds = zip(vguess+COMPTOL*np.ones(NC), +np.inf*np.ones(NC), +np.inf*np.ones(NC))
-    elif MODEL_FIT in ["Voigtian", "rotational"]:
-        npar = 4
-        vguess = [x[np.argmax(f)] + i*3 for i in range(NC)]
-        guess = zip(vguess, NC*[0.6], NC*[5.], fguess)
-        lbounds = zip(vguess-COMPTOL*np.ones(NC), -np.inf*np.ones(NC), 0*np.ones(NC), -np.inf*np.ones(NC))
-        ubounds = zip(vguess+COMPTOL*np.ones(NC), +np.inf*np.ones(NC), +np.inf*np.ones(NC), +np.inf*np.ones(NC))                    
-  
-  if not MODEL_FIT and NC > 0:
-    print(f"'-m' option runs with the fitting options [-G, -L, -V, -R]")
-    quit(1)
-
-  #Finalization of the guess and boundaries
-  if MODEL_FIT:
-     # [c, x0, y0, z0, x1, y1, z1, ...]
-     guess = [min(f0)] + [i for sublist in guess for i in sublist]
-     lbounds = [min(f0) - 0.1*np.ptp(f0)] + [i for sublist in lbounds for i in sublist]
-     ubounds = [min(f0) + 0.3*np.ptp(f0)] + [i for sublist in ubounds for i in sublist]
-     
-     if MODEL_FIT == "Gaussian":
-        mmf = gmm   # mmf = mixture model function
-     elif MODEL_FIT == "Lorentzian":
+    if model_fit == "Gaussian":
+        mmf = gmm
+    elif model_fit == "Lorentzian":
         mmf = lmm
-     elif MODEL_FIT == "Voigtian":
+    elif model_fit == "Voigtian":
         mmf = vmm
-     elif MODEL_FIT == "rotational":
+    elif model_fit == "rotational":
         mmf = rmm
-    
-     if NP:
-       m = np.zeros(len(x), dtype=bool)
-       for xp, exp in zip(xp_sel, xp_sel_err):
-         i = np.argmin(abs(x-xp))
-         m[i-NP:i+NP+1] = True 
-         xfit = x[m]
-         ffit = f[m]
-     else:
-         xfit = x.copy()
-         ffit = f.copy() 
 
-     try:
+    if np_points:
+        m = np.zeros(len(x), dtype=bool)
+        for xp, exp in zip(xp_sel, fp_sel): # We don't use exp (xp_sel_err) here technically in original code
+            i = np.argmin(abs(x - xp))
+            m[i - np_points : i + np_points + 1] = True
+        xfit = x[m]
+        ffit = f[m]
+    else:
+        xfit = x.copy()
+        ffit = f.copy()
+
+    try:
         popt, pcov = curve_fit(mmf, xfit, ffit, p0=guess, bounds=(lbounds, ubounds))
         perr = np.sqrt(np.diag(pcov))
-     except:
-        print("MODEL_FIT FAILED")
-        MODEL_FIT = None
-  
-     #Another way to fit data
-     if LEASTSQ:    
+    except Exception as e:
+        print("MODEL_FIT FAILED:", e)
+        return None
+
+    # Another way to fit data
+    popt2, perr2 = None, None
+    if leastsq_flag:
         errfunc = lambda guess, x, f: gmm(x, *guess) - f
         try:
-            popt2, pcov2, infodict, mesg, success = leastsq(errfunc, guess.copy(), args=(x, f), full_output=1, ftol = 1.e-3, xtol=1.e-3)
+            popt2, pcov2, infodict, mesg, success = leastsq(errfunc, guess.copy(), args=(x, f), full_output=1, ftol=1.e-3, xtol=1.e-3)
             perr2 = np.sqrt(np.diag(pcov2))
-        except ValueError:
-            popt2 = np.nan*np.array(guess)
-            perr2 = np.nan*np.array(guess)
-        #print(p1, cov_x, infodict, mesg, success)
+        except Exception:
+            popt2 = np.nan * np.array(guess)
+            perr2 = np.nan * np.array(guess)
 
+    # Process results into dictionary
+    c_mmf = popt[0]
+    mu_mmf = popt[1::npar]
+    mu_mmf_err = perr[1::npar]
+    n_mmf = popt[npar::npar]
+    
+    idx = mu_mmf.argsort()
+    mu_mmf = mu_mmf[idx]
+    mu_mmf_err = mu_mmf_err[idx]
+    n_mmf = n_mmf[idx]
 
-  if MODEL_FIT:
-     fit = mmf(x, *popt)
-     c_mmf = popt[0] # offset of the Gaussian/Lorentzian/Voigtian mixture
-     mu_mmf = popt[1::npar]   # radial velocities
-     mu_mmf_err = perr[1::npar] # error on radial velocities
-     n_mmf = popt[npar::npar]   # normalisation factor
-     idx = mu_mmf.argsort() # Index of the sorted increasing radial velocities     
-     mu_mmf  = mu_mmf[idx]
-     mu_mmf_err = mu_mmf_err[idx]
-     n_mmf = n_mmf[idx] 
+    result = {
+        'model_name': model_fit,
+        'mmf': mmf,
+        'popt': popt,
+        'perr': perr,
+        'c_mmf': c_mmf,
+        'mu_mmf': mu_mmf,
+        'mu_mmf_err': mu_mmf_err,
+        'n_mmf': n_mmf,
+        'xfit': xfit,
+        'ffit': ffit,
+        'popt2': popt2,
+        'perr2': perr2
+    }
 
-     #For the Gaussian fit with LEASTSQ
-     if LEASTSQ:
-        fit2 = gmm(x, *popt2) 
-        mu_gmm2 = popt2[1::npar]   # radial velocities     
-        mu_gmm_err2 = perr2[1::npar] # error on radial velocities
-  
-     if MODEL_FIT in ["Gaussian", "Lorentzian"]: 
-        sig_mmf = popt[2::npar] # standard deviation of the Gaussian profile / HWHM of the Lorentzian profile 
-        sig_mmf = sig_mmf[idx]
-     elif MODEL_FIT == "Voigtian":
-        alp_mmf = popt[2::4] # HWHM of the Gaussian profile
-        gam_mmf = popt[3::4] # HWHM of the Lorentzian profile
-        alp_mmf = alp_mmf[idx]
-        gam_mmf = gam_mmf[idx]
-     elif MODEL_FIT == 'rotational':
-        eps_mmf = popt[2::4] # Limb-darkening coefficient (set to 0.6 for solar-like stars)
-        vr_mmf  = popt[3::4] # Rotational velocity
-        eps_mmf = eps_mmf[idx]
-        vr_mmf  = vr_mmf[idx]
+    if model_fit in ["Gaussian", "Lorentzian"]:
+        sig_mmf = popt[2::npar]
+        result['sig_mmf'] = sig_mmf[idx]
+    elif model_fit == "Voigtian":
+        alp_mmf = popt[2::4]
+        gam_mmf = popt[3::4]
+        result['alp_mmf'] = alp_mmf[idx]
+        result['gam_mmf'] = gam_mmf[idx]
+    elif model_fit == 'rotational':
+        eps_mmf = popt[2::4]
+        vr_mmf = popt[3::4]
+        result['eps_mmf'] = eps_mmf[idx]
+        result['vr_mmf'] = vr_mmf[idx]
 
-  
-  #Write output files
-  
-  if xp_sel.size and wp.size and xwmin.size and xwmax.size:
-     # Only if 2/3 peaks has a common width 
-     if len(xw)/2 != len(xp_sel):
-        wp = np.array(len(xp_sel)*list(wp))
-        xwmin =  np.array(len(xp_sel)*list(xwmin))
-        xwmax =  np.array(len(xp_sel)*list(xwmax))
+    return result
 
-  #Case where we force the number of components to fit and that number is larger to what DOE get from the derivatives
-  if (xp_sel.size == 1) & (NC > 1):
-    xp_sel = np.array(NC*list(xp_sel))
-    xp_sel_err = np.array(NC*list(xp_sel_err))
-    fp_sel = np.array(NC*list(fp_sel))
-    wp = np.array(NC*list(wp))
-    xwmin =  np.array(NC*list(xwmin))
-    xwmax =  np.array(NC*list(xwmax))
-  elif (xp_sel.size > 1) & (NC > xp_sel.size >1):
-    print('Warning: output files will not reflect the number of components reflected for the fit.')
+def save_outputs(ofn1, ofn2, xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, sigma, count, fit_res, no_outputs, no_output2, typ, x, f, gf, ggf, gggf, nc):
+    """
+    Format and save the peak properties and successive derivatives.
+    """
+    # Only if 2/3 peaks has a common width
+    if len(xwmin) > 0 and len(xp_sel) > 0:
+        if len(xwmin) != len(xp_sel): # Use len(xw)//2 logically, but arrays passed in directly
+            wp = np.array(len(xp_sel) * list(wp))
+            xwmin = np.array(len(xp_sel) * list(xwmin))
+            xwmax = np.array(len(xp_sel) * list(xwmax))
 
-  if TYP == 'min':
-    fp_sel = 1 - fp_sel
+    # Case where we force the number of components
+    if (xp_sel.size == 1) & (nc > 1):
+        xp_sel = np.array(nc * list(xp_sel))
+        xp_sel_err = np.array(nc * list(xp_sel_err))
+        fp_sel = np.array(nc * list(fp_sel))
+        wp = np.array(nc * list(wp))
+        xwmin = np.array(nc * list(xwmin))
+        xwmax = np.array(nc * list(xwmax))
+    elif (xp_sel.size > 1) & (nc > xp_sel.size > 1):
+        print('Warning: output files will not reflect the number of components requested for the fit.')
 
-  if NO_OUTPUTS:
-      pass
-  else:
-     if MODEL_FIT: # Add the optimal parameters determined by the Gaussian fit process at the end of OFILE1
-        if MODEL_FIT == "Gaussian":
-           np.savetxt(OFN1, list(zip(xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, SIGMA*np.ones(wp.size), count*np.ones(wp.size), mu_mmf, mu_mmf_err, sig_mmf, n_mmf, c_mmf*np.ones(wp.size))), fmt='%8.3f %8.3f %10.5f %7.3f %8.3f %8.3f %8.3f %3.0f %8.3f %5.3f %7.3f %6.3f %6.4f', header='x x_err f width xwmin xwmax sigma it, Gaussian fit (mu, mu_err, sigma, n) + offset')
-        elif MODEL_FIT == "Lorentzian":
-           np.savetxt(OFN1, list(zip(xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, SIGMA*np.ones(wp.size), count*np.ones(wp.size), mu_mmf, mu_mmf_err, sig_mmf, n_mmf, c_mmf*np.ones(wp.size))), fmt='%8.3f %8.3f %10.5f %7.3f %8.3f %8.3f %8.3f %3.0f %8.3f %5.3f %7.3f %6.3f %6.4f', header='x x_err f width xwmin xwmax sigma it, Lorentzian fit (mu, mu_err, gamma, n) + offset')
-        elif MODEL_FIT == "Voigtian":
-           np.savetxt(OFN1, list(zip(xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, SIGMA*np.ones(wp.size), count*np.ones(wp.size), mu_mmf, mu_mmf_err, alp_mmf, gam_mmf, n_mmf, c_mmf*np.ones(wp.size))), fmt='%8.3f %10.5f %7.3f %7.3f %8.3f %8.3f %8.3f %3.0f %8.3f %5.3f %7.3f %7.3f %6.3f %6.4f', header='x x_err f width xwmin xwmax sigma it, Voigtian fit (mu, mu_err, alpha, gamma, n) + offset')
-        elif MODEL_FIT == 'rotational':
-           np.savetxt(OFN1, list(zip(xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, SIGMA*np.ones(wp.size), count*np.ones(wp.size), mu_mmf, mu_mmf_err, eps_mmf, vr_mmf, n_mmf, c_mmf*np.ones(wp.size))), fmt='%8.3f %8.3f %10.5f %7.3f %8.3f %8.3f %8.3f %3.0f %8.3f %5.3f %7.3f %7.3f %6.3f %6.4f', header='x x_err f width xwmin xwmax sigma it, rotational fit (mu, mu_err, epsilon, vsini, n) + offset')
-     else:
-        #print(xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, SIGMA*np.ones(wp.size), count*np.ones(wp.size))
-        np.savetxt(OFN1, list(zip(xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, SIGMA*np.ones(wp.size), count*np.ones(wp.size))), fmt='%8.3f %8.3f %9.3f %7.3f %8.3f %8.3f %8.3f %3.0f', header='x x_err f width xwmin xwmax sigma it')
-  
-     if NO_OUTPUT2:
-        pass
-     else:
-        np.savetxt(OFN2, list(zip(x, f, gf, ggf, gggf)), fmt='%10.3f %10.3e %10.3e %10.3e %10.3e', header='x f gf ggf gggf')
-  
-  if BLA:
-    if MODEL_FIT:
-       print(f'Tolerance for each component:          COMPTOL = {COMPTOL} {unit}')
-       if NP:
-         print(f'Number of points selected around each peak: NP = {NP}')
-       #print('guess: ', guess)
-       #print('popt: ', popt)
-       #print('pcov:', pcov)
-       for i, j in zip(mu_mmf, mu_mmf_err):
-           print('{:8.3f} \u00B1 {:5.3f}'.format(i, j), end=' ')    
-       print()
-    if NO_OUTPUTS:
-       print('No output required.')
-    elif NO_OUTPUT2:
-       print("Outputs:")
-       print(' Successive derivatives output:', OFN2) 
-       print(' Components output:            ', OFN1)
-    if PLT:
-       print(' Control plot:                 ', OFN3, end='\n')
-  
-  if NC:
-    npeaks = NC  
-  else:
-    npeaks = xp_sel.size
+    if typ == 'min':
+        fp_sel = 1 - fp_sel
 
-  #Standard output
-  if not BLA:
-      #if MODEL_FIT:
-      #    if NC:
-      #      npeaks = NC 
-      #    else:
-      #      npeaks = xp_sel.size 
-      #else:
-      #    npeaks = xp_sel.size 
-      
-      print(IFN, npeaks, end=' ')
-      
-      if xp_sel.size == 0:
-         print(warn_text+' (IT = '+str(count)+')')
-      if not MODEL_FIT:
-         for i, j in zip(xp_sel, xp_sel_err): 
-            print('{:8.3f} \u00B1 {:5.3f}'.format(i, j), end=' ')
-      else:
-         for i, j in zip(mu_mmf, mu_mmf_err):
-            print('{:8.3f} \u00B1 {:5.3f}'.format(i, j), end=' ')
-      print()
-  
-  #Plotting:
-  
-  if PLT:
-  
-     title = op.basename(IFN) + ' (' + str(len(x_inp)) + ') ' + '\n'
-     title += '[THRES0 = '+str(int(THRES0*100))+'%, THRES2 = '+str(int(THRES2*100))+'%, SIGMA = '+format(SIGMA, '4.1f')+' '+unit
+    if not no_outputs:
+        if fit_res:
+            model_fit = fit_res['model_name']
+            c_mmf = fit_res['c_mmf']
+            mu_mmf = fit_res['mu_mmf']
+            mu_mmf_err = fit_res['mu_mmf_err']
+            n_mmf = fit_res['n_mmf']
+            
+            common_data = list(zip(xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, sigma * np.ones(wp.size), count * np.ones(wp.size), mu_mmf, mu_mmf_err))
 
-     if N:
-        title += ', N = '+str(N)
-     if not ONE_PASS:
-        title += ', IT = '+str(count)
+            if model_fit == "Gaussian":
+                data = [(*row, s, n, c) for row, s, n, c in zip(common_data, fit_res['sig_mmf'], n_mmf, c_mmf * np.ones(wp.size))]
+                np.savetxt(ofn1, data, fmt='%8.3f %8.3f %10.5f %7.3f %8.3f %8.3f %8.3f %3.0f %8.3f %5.3f %7.3f %6.3f %6.4f', header='x x_err f width xwmin xwmax sigma it, Gaussian fit (mu, mu_err, sigma, n) + offset')
+            elif model_fit == "Lorentzian":
+                data = [(*row, s, n, c) for row, s, n, c in zip(common_data, fit_res['sig_mmf'], n_mmf, c_mmf * np.ones(wp.size))]
+                np.savetxt(ofn1, data, fmt='%8.3f %8.3f %10.5f %7.3f %8.3f %8.3f %8.3f %3.0f %8.3f %5.3f %7.3f %6.3f %6.4f', header='x x_err f width xwmin xwmax sigma it, Lorentzian fit (mu, mu_err, gamma, n) + offset')
+            elif model_fit == "Voigtian":
+                data = [(*row, a, g, n, c) for row, a, g, n, c in zip(common_data, fit_res['alp_mmf'], fit_res['gam_mmf'], n_mmf, c_mmf * np.ones(wp.size))]
+                np.savetxt(ofn1, data, fmt='%8.3f %10.5f %7.3f %7.3f %8.3f %8.3f %8.3f %3.0f %8.3f %5.3f %7.3f %7.3f %6.3f %6.4f', header='x x_err f width xwmin xwmax sigma it, Voigtian fit (mu, mu_err, alpha, gamma, n) + offset')
+            elif model_fit == 'rotational':
+                data = [(*row, e, v, n, c) for row, e, v, n, c in zip(common_data, fit_res['eps_mmf'], fit_res['vr_mmf'], n_mmf, c_mmf * np.ones(wp.size))]
+                np.savetxt(ofn1, data, fmt='%8.3f %8.3f %10.5f %7.3f %8.3f %8.3f %8.3f %3.0f %8.3f %5.3f %7.3f %7.3f %6.3f %6.4f', header='x x_err f width xwmin xwmax sigma it, rotational fit (mu, mu_err, epsilon, vsini, n) + offset')
+        else:
+            np.savetxt(ofn1, list(zip(xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, sigma * np.ones(wp.size), count * np.ones(wp.size))), fmt='%8.3f %8.3f %9.3f %7.3f %8.3f %8.3f %8.3f %3.0f', header='x x_err f width xwmin xwmax sigma it')
 
-     if NC:
-        title += ', NC = '+str(NC)
-  
-     title = title + ']'
-  
-     plt.figure(figsize=(8, 7), dpi=100, facecolor='w', edgecolor='k')
-  
-     plt.subplots_adjust(hspace=0.05)
-     plt.rc('font', size=13)
-     
-     plt1 = plt.subplot(411)
-     plt2 = plt.subplot(412, sharex=plt1)
-     plt3 = plt.subplot(413, sharex=plt1)
-     plt4 = plt.subplot(414, sharex=plt1)
-  
-     for i in (plt1, plt2, plt3, plt4):
+    if not no_output2:
+        np.savetxt(ofn2, list(zip(x, f, gf, ggf, gggf)), fmt='%10.3f %10.3e %10.3e %10.3e %10.3e', header='x f gf ggf gggf')
+
+def plot_control_panel(ifn, thres0, thres2, sigma, unit, x_inp, x, f, x0, f0, gf, ggf, gggf, n_interp, one_pass, count, nc, typ, xp_tot, xp_sel, xp_sel_err, wp, xw, fit_res, leastsq_flag, n_points, lab, np_max, xmin, xmax, ymin, ymax, pure_der_flag, ofn3, plt_mode):
+    """
+    Generate and save (or display) the diagnostic control plot.
+    """
+    title = op.basename(ifn) + ' (' + str(len(x_inp)) + ') \n'
+    title += f'[THRES0 = {int(thres0*100)}%, THRES2 = {int(thres2*100)}%, SIGMA = {sigma:.1f} {unit}'
+    if n_interp: title += f', N = {n_interp}'
+    if not one_pass: title += f', IT = {count}'
+    if nc: title += f', NC = {nc}'
+    title += ']'
+
+    plt.figure(figsize=(8, 7), dpi=100, facecolor='w', edgecolor='k')
+    plt.subplots_adjust(hspace=0.05)
+    plt.rc('font', size=13)
+
+    plt1 = plt.subplot(411)
+    plt2 = plt.subplot(412, sharex=plt1)
+    plt3 = plt.subplot(413, sharex=plt1)
+    plt4 = plt.subplot(414, sharex=plt1)
+
+    for i in (plt1, plt2, plt3, plt4):
         for j in xp_tot:
-           i.axvline(x=j, ls='solid', color='0.95', lw=0.2)
-  
-     if TYP == 'max':
+            i.axvline(x=j, ls='solid', color='0.95', lw=0.2)
+
+    if typ == 'max':
         plt1.plot(x0, f0, '-', lw=1, color='0.50', label='original')
         plt1.plot(x, f, 'ko', ms=1.5, label='selection')
-        if MODEL_FIT:
-           #plt1.plot(x, fit, 'b-', label=MODEL_FIT + ' fit')
-           plt1.plot(x0, mmf(x0, *popt), 'b-', label=MODEL_FIT + ' fit')
-           if npeaks > 1:
-              #Plot individual components
-              if MODEL_FIT == 'Gaussian':
-                 for mu, sigma, n, offset in zip(mu_mmf, sig_mmf, n_mmf, c_mmf*np.ones(wp.size)):
-                    ytemp = n*np.exp(-(x0-mu)**2/(2*sigma**2)) + offset
-                    plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
-              if MODEL_FIT == 'Lorentzian':
-                 for mu, gam, n, offset  in zip(mu_mmf, sig_mmf, n_mmf, c_mmf*np.ones(wp.size)):             
-                    ytemp = n * gam / np.pi / ((x0 - mu)**2 + gam**2) + offset
-                    plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
-              if MODEL_FIT == 'Voigtian':
-                 for mu, sig, gam, n, offset in zip(mu_mmf, alp_mmf, gam_mmf, n_mmf, c_mmf*np.ones(wp.size)): 
-                    ytemp = n * np.real(special.wofz(((x0 - mu) + 1j * gam) / sig / np.sqrt(2))) + offset       
-                    plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
-              if MODEL_FIT == 'rotational':
-                 for mu, eps, vr, n, offset in zip(mu_mmf, eps_mmf, vr_mmf, n_mmf, c_mmf*np.ones(wp.size)):
-                    xx = ((x0-mu)/vr)**2
-                    r0 = (2+(np.pi/2-2)*eps) / (np.pi*vr*(1-eps/3))
-                    xx[abs(xx)>1] = 1
-                    ytemp = n/r0 * (2*(1-eps)*(1-xx)**0.5 + 0.5*np.pi*eps*(1-xx)) / (np.pi*vr*(1-eps/3.))
-                    plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
-           if LEASTSQ:    
-             plt1.plot(x, fit2, 'g-', label='Gaussian fit (leastsq)')          
-           if NP:
-             plt1.plot(xfit, ffit, '.r', label='Used in the fit')
-        #plt1.axhline(y=min(f0), ls='dotted', color='0.00')
-        plt1.axhline(y=thres0, ls='solid', color='r', lw=0.5)
-     elif TYP == 'min':
-        plt1.plot(x0, 1-f0, '-', lw=1, color='0.50', label='original')
-        plt1.plot(x, 1-f, 'ko', ms=1.5, label='selection')
-        if MODEL_FIT:
-           plt1.plot(x, 1-fit, 'b-', label=MODEL_FIT + ' fit')      
+        
+        if fit_res:
+            mmf = fit_res['mmf']
+            popt = fit_res['popt']
+            model_fit = fit_res['model_name']
+            
+            plt1.plot(x0, mmf(x0, *popt), 'b-', label=model_fit + ' fit')
+            
+            npeaks = nc if nc else xp_sel.size
+            if npeaks > 1:
+                mu_mmf = fit_res['mu_mmf']
+                n_mmf = fit_res['n_mmf']
+                c_mmf = fit_res['c_mmf']
+                
+                if model_fit == 'Gaussian':
+                    for mu, sig, n, offset in zip(mu_mmf, fit_res['sig_mmf'], n_mmf, c_mmf * np.ones(wp.size)):
+                        ytemp = n * np.exp(-(x0 - mu)**2 / (2 * sig**2)) + offset
+                        plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
+                elif model_fit == 'Lorentzian':
+                    for mu, gam, n, offset in zip(mu_mmf, fit_res['sig_mmf'], n_mmf, c_mmf * np.ones(wp.size)):
+                        ytemp = n * gam / np.pi / ((x0 - mu)**2 + gam**2) + offset
+                        plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
+                elif model_fit == 'Voigtian':
+                    for mu, sig, gam, n, offset in zip(mu_mmf, fit_res['alp_mmf'], fit_res['gam_mmf'], n_mmf, c_mmf * np.ones(wp.size)):
+                        ytemp = n * np.real(special.wofz(((x0 - mu) + 1j * gam) / sig / np.sqrt(2))) + offset
+                        plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
+                elif model_fit == 'rotational':
+                    for mu, eps, vr, n, offset in zip(mu_mmf, fit_res['eps_mmf'], fit_res['vr_mmf'], n_mmf, c_mmf * np.ones(wp.size)):
+                        xx = ((x0 - mu) / vr)**2
+                        r0 = (2 + (np.pi / 2 - 2) * eps) / (np.pi * vr * (1 - eps / 3))
+                        xx[abs(xx) > 1] = 1
+                        ytemp = n / r0 * (2 * (1 - eps) * (1 - xx)**0.5 + 0.5 * np.pi * eps * (1 - xx)) / (np.pi * vr * (1 - eps / 3.))
+                        plt1.plot(x0, ytemp, '-b', lw=1, alpha=0.3)
+
+            if leastsq_flag and fit_res.get('popt2') is not None:
+                popt2 = fit_res['popt2']
+                if not np.any(np.isnan(popt2)):
+                    fit2 = gmm(x, *popt2)
+                    plt1.plot(x, fit2, 'g-', label='Gaussian fit (leastsq)')
+            if n_points:
+                plt1.plot(fit_res['xfit'], fit_res['ffit'], '.r', label='Used in the fit')
+
+        plt1.axhline(y=thres0 * np.ptp(f0) + min(f0), ls='solid', color='r', lw=0.5)
+
+    elif typ == 'min':
+        plt1.plot(x0, 1 - f0, '-', lw=1, color='0.50', label='original')
+        plt1.plot(x, 1 - f, 'ko', ms=1.5, label='selection')
+        if fit_res:
+             plt1.plot(x, 1 - fit_res['mmf'](x, *fit_res['popt']), 'b-', label=fit_res['model_name'] + ' fit')
         plt1.axhline(y=1, ls='dotted', color='0.00', alpha=0.4, lw=0.5)
-        plt1.axhline(y=1-thres0,ls='solid', color='r', lw=0.5)
-  
+        plt1.axhline(y=1 - (thres0 * np.ptp(f0) + min(f0)), ls='solid', color='r', lw=0.5)
+
+    if lab:
+        plt1.set_title(lab, fontsize=15)
+    elif title:
+        plt1.set_title(title, fontsize=8)
+
+    plt2.plot(x, gf, 'k-o', ms=1.5, label='1st smoothed')
+    plt3.plot(x, ggf, 'k-o', ms=1.5, label='2nd smoothed')
+    plt3.axhline(y=-thres2*(max(ggf)-min(ggf)), ls='solid', color='r', lw=0.5)
     
-     if LAB:
-        plt1.set_title(LAB,fontsize=15)
-     elif not NOT:
-        plt1.set_title(title, fontsize=8) 
-  
-  
-     plt2.plot(x, gf, 'k-o', ms=1.5, label='1st smoothed')
-     
-     plt3.plot(x, ggf, 'k-o', ms=1.5, label='2nd smoothed')
-     plt3.axhline(y=-thres2, ls='solid', color='r', lw=0.5)
-     for i in range(0, len(xw)-1, 2):
-        plt3.plot(xw[i:i+2], np.array([0,0]), 'k-', lw=2)
-  
-     plt4.plot(x, gggf, 'k-o', ms=1.5, label='3rd smoothed')
-  
-     if TYP == 'max':
+    for i in range(0, len(xw) - 1, 2):
+        plt3.plot(xw[i:i+2], np.array([0, 0]), 'k-', lw=2)
+
+    plt4.plot(x, gggf, 'k-o', ms=1.5, label='3rd smoothed')
+
+    if typ == 'max':
         plt4.set_xlabel('$v$ [km/s]', size=15)
-     elif TYP == 'min':
+    elif typ == 'min':
         plt4.set_xlabel('$\\lambda$ [Å]', size=15)
 
-     if PURE_DER:
+    if pure_der_flag:
+        x0d, f0d, x0dd, f0dd, x0ddd, f0ddd = compute_pure_derivatives(x0, f0)
         plt2.plot(x0d, f0d, '-', color='0.8', lw=0.5, label='1st derivative', zorder=0)
         plt3.plot(x0dd, f0dd, '-', color='0.8', lw=0.5, label='2nd derivative', zorder=0)
         plt4.plot(x0ddd, f0ddd, '-', color='0.8', lw=0.5, label='3rd derivative', zorder=0)
-  
-     for i in (plt1, plt2, plt3, plt4):
+
+    for i in (plt1, plt2, plt3, plt4):
         i.legend(frameon=True, loc=1, fontsize=10)
-        i.yaxis.set_major_locator(MaxNLocator(nbins=5, steps=[1,2,5,9,10], prune='lower'))
-        i.ticklabel_format(axis='y', style='plain', scilimits=(-2,2), useOffset=False)
+        i.yaxis.set_major_locator(MaxNLocator(nbins=5, steps=[1, 2, 5, 9, 10], prune='lower'))
+        i.ticklabel_format(axis='y', style='plain', scilimits=(-2, 2), useOffset=False)
         i.axvline(x=0, ls='dotted', color='0.00', alpha=0.4, lw=0.5)
         i.axhline(y=0, ls='dotted', color='0.00', alpha=0.4, lw=0.5)
 
         for j in xp_sel:
-           i.axvline(x=j, ls='solid', color='0.00', lw=0.7)
-  
-        if MODEL_FIT:
-          for j in mu_mmf:
-             plt1.axvline(x=j, ls='solid', color='b', lw=0.7)
-             if LEASTSQ:
-                plt1.axvline(x=j, ls='solid', color='g', lw=0.7)
-        
-     for i in (plt1, plt2, plt3):
+            i.axvline(x=j, ls='solid', color='0.00', lw=0.7)
+
+        if fit_res:
+            for j in fit_res['mu_mmf']:
+                plt1.axvline(x=j, ls='solid', color='b', lw=0.7)
+                if leastsq_flag:
+                    plt1.axvline(x=j, ls='solid', color='g', lw=0.7)
+
+    for i in (plt1, plt2, plt3):
         i.tick_params(axis='both', which='both', direction='in', top=True, bottom=True, labelbottom=False)
-     plt4.tick_params(axis='both', which='both', direction='in', top=True, bottom=True, labelbottom=True)
+    plt4.tick_params(axis='both', which='both', direction='in', top=True, bottom=True, labelbottom=True)
 
-  
-     if XMIN and XMAX:
-        plt1.set_xlim([XMIN, XMAX])
-  
-     if XMIN and not XMAX:
-        plt1.set_xlim([XMIN, -XMIN])
-  
-     if XMAX and not XMIN:
-        plt1.set_xlim([-XMAX, XMAX])
-  
-     if not XMIN and not XMAX:
-        if TYP == 'max':
-           plt1.set_xlim([min(x)-1.6*Dx, max(x)+1.6*Dx])  
-           #plt1.set_xlim([min(x), max(x)])
+    Dx = max(x) - min(x)
+    
+    if xmin and xmax:
+        plt1.set_xlim([xmin, xmax])
+    elif xmin and not xmax:
+        plt1.set_xlim([xmin, -xmin])
+    elif xmax and not xmin:
+        plt1.set_xlim([-xmax, xmax])
+    else:
+        if typ == 'max':
+            plt1.set_xlim([min(x) - 1.6 * Dx, max(x) + 1.6 * Dx])
         else:
-           plt1.set_xlim([min(x), max(x)])
-  
-     if YMIN and not YMAX:
-        plt1.set_ylim([YMIN, max(f)])
-     
-     if YMAX and not YMIN:
-        plt1.set_ylim([min(f), YMAX])
-  
-     if YMIN and YMAX:
-        plt1.set_ylim([YMIN, YMAX])
-  
-     #if PURE_DER:
-     #   plt2.set_ylim([-5e-3,5e-3])
-     #   plt3.set_ylim([-3e-4,3e-4])
-     #   plt4.set_ylim([-5e-5,5e-5])
-  
-  
-     if xp_sel.size > NP_MAX:
-        plt4.text(0.05, 0.1, str(xp_sel.size)+' components', transform=plt1.transAxes) #, fontsize=11)
-     else:
-  
-        if TYP == 'max':
-           base = 'v'
-        else:
-           base = 'l'      
-  
-        #Print velocities from third derivatives and widths
-        for ind, (itm1, itm2) in enumerate(zip(xp_sel[:NP_MAX], xp_sel_err[:NP_MAX])):
-           textv = '$v_{}$ = {:7.3f} \u00B1 {:.3f} km/s'.format(ind+1, itm1, itm2)
-           try:
-              textw = '$w_{}$ = {:7.3f} km/s'.format(ind+1, wp[ind]) 
-           except IndexError:
-              pass           
-           ycord = 0.8-ind/6.
-           plt4.text(0.02, ycord, textv, transform=plt4.transAxes, fontsize=9)
-           try:
-              plt3.text(0.02, ycord, textw, transform=plt3.transAxes, fontsize=9)
-           except NameError:
-              pass
+            plt1.set_xlim([min(x), max(x)])
 
-        #Print velocities from fit
-        for ind in range(max(NC, xp_sel.size)):
+    if ymin and ymax:
+        plt1.set_ylim([ymin, ymax])
+    elif ymin and not ymax:
+        plt1.set_ylim([ymin, max(f)])
+    elif ymax and not ymin:
+        plt1.set_ylim([min(f), ymax])
 
-           if MODEL_FIT:
-              if MODEL_FIT in ['Gaussian', 'Lorentzian']:
-                width = 2*sig_mmf[ind]
-              elif MODEL_FIT == 'Voigtian':
-                width = 2*alp_mmf[ind] / np.sqrt(2 * np.log(2))
-              elif MODEL_FIT == 'rotational':
-                width = vr_mmf[ind] 
-              try:
-                 textv_gf = '$v_{}$={:7.3f}\u00B1{:.3f} ($w_{}$={:.3f}) km/s'.format(ind+1, mu_mmf[ind], mu_mmf_err[ind], ind+1, width)
-              except IndexError:
-                 pass
-              if LEASTSQ:
+    if xp_sel.size > np_max:
+        plt4.text(0.05, 0.1, str(xp_sel.size) + ' components', transform=plt1.transAxes)
+    else:
+        for ind, (itm1, itm2) in enumerate(zip(xp_sel[:np_max], xp_sel_err[:np_max])):
+            textv = '$v_{}$ = {:7.3f} \u00B1 {:.3f} km/s'.format(ind + 1, itm1, itm2)
+            try:
+                textw = '$w_{}$ = {:7.3f} km/s'.format(ind + 1, wp[ind])
+            except IndexError:
+                pass
+            ycord = 0.8 - ind / 6.
+            plt4.text(0.02, ycord, textv, transform=plt4.transAxes, fontsize=9)
+            try:
+                plt3.text(0.02, ycord, textw, transform=plt3.transAxes, fontsize=9)
+            except NameError:
+                pass
+
+        for ind in range(max(nc, xp_sel.size)):
+            if fit_res:
+                model_fit = fit_res['model_name']
+                mu_mmf = fit_res['mu_mmf']
+                mu_mmf_err = fit_res['mu_mmf_err']
+                
+                if model_fit in ['Gaussian', 'Lorentzian']:
+                    width = 2 * fit_res['sig_mmf'][ind] if ind < len(fit_res['sig_mmf']) else 0
+                elif model_fit == 'Voigtian':
+                    width = 2 * fit_res['alp_mmf'][ind] / np.sqrt(2 * np.log(2)) if ind < len(fit_res['alp_mmf']) else 0
+                elif model_fit == 'rotational':
+                    width = fit_res['vr_mmf'][ind] if ind < len(fit_res['vr_mmf']) else 0
+                
                 try:
-                    textv_gf2 = '$v_{}$={:7.3f}\u00B1{:.3f} km/s'.format(ind+1, mu_gmm2[ind], mu_gmm_err2[ind])
+                    textv_gf = '$v_{}$={:7.3f}\u00B1{:.3f} ($w_{}$={:.3f}) km/s'.format(ind + 1, mu_mmf[ind], mu_mmf_err[ind], ind + 1, width)
+                    ycord = 0.8 - ind / 6.
+                    plt1.text(0.02, ycord, textv_gf, transform=plt1.transAxes, color='blue', fontsize=9)
                 except IndexError:
-                    pass                
+                    pass
 
-              ycord = 0.8-ind/6.
-              plt1.text(0.02, ycord, textv_gf, transform=plt1.transAxes, color='blue', fontsize=9)
-              if LEASTSQ:
-                ycord2 = 0.4-ind/6. 
-                plt1.text(0.02, ycord2, textv_gf2, transform=plt1.transAxes, color='green', fontsize=9)
+                if leastsq_flag and fit_res.get('popt2') is not None and not np.any(np.isnan(fit_res['popt2'])):
+                    try:
+                        mu_gmm2 = fit_res['popt2'][1::3]
+                        mu_gmm_err2 = fit_res['perr2'][1::3]
+                        textv_gf2 = '$v_{}$={:7.3f}\u00B1{:.3f} km/s'.format(ind + 1, mu_gmm2[ind], mu_gmm_err2[ind])
+                        ycord2 = 0.4 - ind / 6.
+                        plt1.text(0.02, ycord2, textv_gf2, transform=plt1.transAxes, color='green', fontsize=9)
+                    except IndexError:
+                        pass
 
-  
-     #plt3.set_xticklabels([])
-     #plt4.set_xticklabels(['', -75, -50, -25, 0, 25, 50, 75])
+    if ofn3:
+        plt.savefig(ofn3, dpi=150, orientation='landscape', bbox_inches='tight')
 
-     plt.savefig(OFN3, dpi=150, orientation='landscape', bbox_inches='tight')    
-  
-     if PLT == 2:
+    if plt_mode == 2:
         plt.show()
-     else:
+    elif plt_mode == 1:
         plt.draw()
-   
-  #xp_fit = (6*[np.nan*wp.size])
-  xp_fit = (np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]))
-  #Prepare the return of the function
-  if MODEL_FIT == 'Gaussian':
-     xp_fit = (mu_mmf, mu_mmf_err, sig_mmf, n_mmf, c_mmf*np.ones(wp.size))
-  elif MODEL_FIT in ["Lorentzian", "Voigtian", 'rotational']:
-     print('Lorentzian, Voigtian and rotational output setup not yet implemented.')
-     input()
+
+def run_doe(IFN, VERSION=VERSION, BLA=False, TYP='max', PLT=None, EXT_NUMBER=0, NO_OUTPUTS=False, NO_OUTPUT2=False, THRES0=THRES0, THRES2=THRES2, SIGMA0=None, N=None, N_OFFSET=N_OFFSET, ONE_PASS=False, COMPTOL=20, Gaussian_FIT=False, Lorentzian_FIT=False, Voigtian_FIT=False, ROTATIONAL_FIT=False, NC=0, NP=0, XMIN=None, XMAX=None, YMIN=None, YMAX=None, NOT=False, LAB=None, PURE_DER=False):
+    
+    # 1. Initialization and Fitting Model Selection
+    if Gaussian_FIT: MODEL_FIT = "Gaussian"
+    elif Lorentzian_FIT: MODEL_FIT = "Lorentzian"
+    elif Voigtian_FIT: MODEL_FIT = "Voigtian"
+    elif ROTATIONAL_FIT: MODEL_FIT = "rotational"
+    else: MODEL_FIT = None
+  
+    if TYP not in ('min', 'max'):
+        print('The type option -t accepts only "min" or "max" values.')
+        sys.exit(1)
+  
+    # 2. Data Loading and Initial Processing
+    x0, f0, unit = load_data(IFN, TYP, EXT_NUMBER, BLA)
+    
+    # 3. Data Range Selection based on Threshold
+    x_sel, f_sel, thres0_abs = select_data_range(x0, f0, THRES0, N_OFFSET)
+    
+    # 4. Interpolation and Normalization
+    x, f, dx = preprocess_data(x_sel, f_sel, N)
+
+    NR = len(x0)
+    Dx = max(x) - min(x) if len(x) > 0 else 0
+    
+    if not SIGMA0:
+        if TYP == 'max':
+            SIGMA0 = 3 * dx 
+        elif TYP == 'min':
+            SIGMA0 = 20 * len(x) / (Dx * 3.e5 / x.mean()) if Dx > 0 else 1.0
+
+    # Output file names
+    parstr = f"doe_{THRES0:3.2f}_{THRES2:3.2f}_{SIGMA0:3.2f}_{N_OFFSET:0>3.0f}"
+    OFN1 = op.basename(IFN[:-4]) + parstr + '_xp.dat' 
+    OFN2 = op.basename(IFN[:-4]) + parstr + '_sd.dat' 
+    OFN3 = op.basename(IFN[:-4]) + parstr + '.png' if PLT else None
+
+    # 5. Iterative Derivative Smoothing and Peak Finding
+    count = 0
+    SIGMA = SIGMA0
+    
+    while True:
+        gf, ggf, gggf = compute_smoothed_derivatives(f, SIGMA, dx)
+        xp_tot, fp_tot, ggfp_tot = find_peaks(x, f, ggf, gggf)
         
-  return {'xp_sel':xp_sel, 'xp_sel_err': xp_sel_err, 'xp_fit': xp_fit}
+        thres2_abs = THRES2 * (max(ggf) - min(ggf))
+  
+        if len(xp_tot) < 1:
+            warn_text = "No peaks detected"
+            xp_sel, xw = np.zeros(0), np.zeros(0)
+            NO_OUTPUTS = True
+            break
+  
+        crit = ggfp_tot < -thres2_abs
+        idx = np.where(crit)[0]
+        
+        xp_sel = xp_tot[idx]
+        fp_sel = fp_tot[idx]
+        ggfp_sel = ggfp_tot[idx]
+  
+        if len(xp_sel) < 1:
+            warn_text = "No peaks selected"
+            xw = np.zeros(0)
+            NO_OUTPUTS = True      
+            break
+  
+        xw, wp = find_widths(x, xp_sel, ggf)
+        xwmin = xw[::2]
+        xwmax = xw[1::2]
+  
+        if xw.size == 0 or wp.size == 0:
+            warn_text = "Warning: DOE cannot measure the width of the second derivative! Maybe the SIGMA parameter is too high? Or use '-n' option to interpolate on more absicssa."
+            print(warn_text)
+            xw = np.nan * np.ones(xp_sel.size)
+            wp = np.nan * np.ones(xp_sel.size)
+            xwmin = np.nan * np.ones(xp_sel.size)
+            xwmax = np.nan * np.ones(xp_sel.size)
+        
+        if wp.size == 0 or len(set(wp)) == len(xp_sel) or ONE_PASS:
+            break
+        else:
+            count += 1
+            SIGMA += DSIGMA
+
+    # 6. Error Estimation
+    xp_sel_err = [(x0[1] - x0[0]) / 2 for _ in range(xp_sel.size)] if len(x0) > 1 else [0] * xp_sel.size
+
+    # 7. Console Output (Verbose)
+    if BLA:
+        print(f"\nDetection Of Extrema - Version {VERSION} - Thibaut Merle - Verbose mode activated \n")
+        print(f"Cross-correlation function-like input (TYP = {TYP})" if TYP == 'max' else f"Spectrum-like input (TYP = {TYP})")
+        print(f"Number of the abscissa points: NR = {NR}")
+        print(f"Step: dx = {dx:6.4f} {unit}")     
+        print(f"Relative threshold on the CCF/spectrum:    THRES0   = {THRES0*100}% => Absolute threshold: {thres0_abs:10.3e}")
+        # Estimating imin/imax just for print to match old output loosely
+        print(f" Total number of abscissa selected for the derivatives:        {len(x):>4d}")
+        if N: print(f" Interpolation activated, number of abscissa:              N = {N:>4d}")
+        print(f" Interval of abscissa:    [{min(x)}, {max(x)}] {unit}, range of {np.ptp(x):8.3f} {unit}" if len(x)>0 else "No data selected.")
+        print(f"Initial derivative smoothing parameter:    SIGMA0   = {SIGMA0:4.1f} {unit}")
+        if count:
+            print(f"Automatic iteration performed to smooth the derivatives:")
+            print(f" Number of iterations:                 IT       = {count}")
+            print(f" Step in SIGMA:                        DSIGMA   = {DSIGMA}")
+            print(f' Final derivative smoothing parameter: SIGMA    = {SIGMA:5.1f} {unit}')
+        print(f"\nNumber of ascending zeros on the third derivative:     {xp_tot.size}")   
+        print(f"\nRelative threshold on the 2nd derivative:  THRES2   = {THRES2*100}% => Absolute threshold: {-thres2_abs:10.3e}")
+        print(f"\nNumber of RV components kept on the second derivative: {xp_sel.size}")
+        print(" ".join(['{:8.3f} \u00B1 {:5.3f}'.format(i, j) for i, j in zip(xp_sel, xp_sel_err)]))
+        
+        if MODEL_FIT:
+            print(f'\nFit the CCF with a {MODEL_FIT} mixture model.')
+            if NC: print(rf'/!\ User requires to fit {NC} components.')
+
+    if not MODEL_FIT and NC > 0:
+        print(f"'-m' option runs with the fitting options [-G, -L, -V, -R]")
+        sys.exit(1)
+
+    # 8. Fitting Components
+    fit_res = None
+    if MODEL_FIT and not NO_OUTPUTS:
+        fit_res = fit_components(x, f, x0, f0, xp_sel, fp_sel, wp, MODEL_FIT, NC, COMPTOL, NP, LEASTSQ, N)
+
+    # 9. Console Output (Verbose Fit Info)
+    if BLA:
+        if fit_res:
+            print(f'Tolerance for each component:          COMPTOL = {COMPTOL} {unit}')
+            if NP: print(f'Number of points selected around each peak: NP = {NP}')
+            print(" ".join(['{:8.3f} \u00B1 {:5.3f}'.format(i, j) for i, j in zip(fit_res['mu_mmf'], fit_res['mu_mmf_err'])]))
+        
+        if NO_OUTPUTS: print('No output required.')
+        elif NO_OUTPUT2: 
+            print("Outputs:\n Successive derivatives output:", OFN2, "\n Components output:            ", OFN1)
+        if PLT: print(' Control plot:                 ', OFN3)
+
+    # 10. Write Output Files
+    save_outputs(OFN1, OFN2, xp_sel, xp_sel_err, fp_sel, wp, xwmin, xwmax, SIGMA, count, fit_res, NO_OUTPUTS, NO_OUTPUT2, TYP, x, f, gf, ggf, gggf, NC)
+
+    npeaks = NC if NC else xp_sel.size
+
+    # 11. Standard Standard Output
+    if not BLA:
+        print(IFN, npeaks, end=' ')
+        if xp_sel.size == 0:
+            print(warn_text + str(count) + ')')
+        
+        if not fit_res:
+            print(" ".join(['{:8.3f} \u00B1 {:5.3f}'.format(i, j) for i, j in zip(xp_sel, xp_sel_err)]))
+        else:
+            print(" ".join(['{:8.3f} \u00B1 {:5.3f}'.format(i, j) for i, j in zip(fit_res['mu_mmf'], fit_res['mu_mmf_err'])]))
+
+    # 12. Plotting
+    if PLT:
+        plot_control_panel(IFN, THRES0, THRES2, SIGMA, unit, x0, x, f, x0, f0, gf, ggf, gggf, N, ONE_PASS, count, NC, TYP, xp_tot, xp_sel, xp_sel_err, wp, xw, fit_res, LEASTSQ, NP, LAB, NP_MAX, XMIN, XMAX, YMIN, YMAX, PURE_DER, OFN3, PLT)
+
+    # 13. Return Data Dictionary
+    xp_fit = (np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]), np.array([np.nan]))
+    if fit_res:
+        if MODEL_FIT == 'Gaussian':
+            xp_fit = (fit_res['mu_mmf'], fit_res['mu_mmf_err'], fit_res['sig_mmf'], fit_res['n_mmf'], fit_res['c_mmf'] * np.ones(wp.size))
+        elif MODEL_FIT in ["Lorentzian", "Voigtian", 'rotational']:
+            print(f'{MODEL_FIT} output setup not yet completely implemented for function return.')
+
+    return {'xp_sel': xp_sel, 'xp_sel_err': xp_sel_err, 'xp_fit': xp_fit}
+
 
 
 #######################################################################################
@@ -991,9 +959,9 @@ if __name__ == '__main__':
   group4 = parser.add_argument_group('Fitting parameters')
   group4.add_argument('--comptol', type=float, default=20, help='Fit tolerance on x position for each x component in km/s or Å (default: 20).')
   group4.add_argument('-G', '--Gaussian_fit', action='store_true', default=False, help='Fit the detected peaks with Gaussian function and give the velocities fitted on the line command.')
-  group4.add_argument('-L', '--Lorentzian_fit', action='store_true', default=False, help='Fit the detected peaks with Lorentzian function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
-  group4.add_argument('-V', '--Voigtian_fit', action='store_true', default=False, help='Fit the detected peaks with Voigt function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
-  group4.add_argument('-R', '--rotational_fit', action='store_true', default=False, help='Fit the detected peaks with rotational function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
+  group4.add_argument('-L', '--Lorentzian_fit', action='store_true', default=False, help=r'Fit the detected peaks with Lorentzian function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
+  group4.add_argument('-V', '--Voigtian_fit', action='store_true', default=False, help=r'Fit the detected peaks with Voigt function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
+  group4.add_argument('-R', '--rotational_fit', action='store_true', default=False, help=r'Fit the detected peaks with rotational function and give the velocities fitted on the line command. /!\ only tested with TYP = "max"')
   group4.add_argument('-m', type=int, default=0, help='Number of components to fit (it forces DOE to fit this number of RV components).')
   group4.add_argument('-np', type=int, default=0, help='Number of x points taken around each peak detected.')
   #Optional -- Graphical parameters
